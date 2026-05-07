@@ -250,3 +250,25 @@ Build a website that can group you and your friends schedules with time slots an
 - Backend health OK; new groups receive the new orange/red defaults
 - Light/dark screenshots show the new palettes + static legend
 - Functional clipboard test: clicking "Copy" inside the share menu shows `"Invite link copied!"` toast even though `navigator.clipboard.readText` is blocked in the iframe (proving the fallback works)
+
+---
+
+## Iteration — 7 May 2026 · part 7 (recents + stable week bar)
+
+### Changes
+- **Week snapshot — rock-stable layout** when navigating:
+  - Center date label switched from `min-w-[200px]` to a fixed `w-[220px] sm:w-[260px]`. Wide enough for the longest possible Mon-Sun string.
+  - Right-side group switched to fixed `w-[230px]` with `whitespace-nowrap` on both the offset label (`w-[120px]`) and the "This week" reset button.
+  - Reset button is now ALWAYS rendered with `style={{ visibility: weekOffset === 0 ? "hidden" : "visible" }}` so its space is reserved even on the home week. Layout no longer reflows.
+  - Functional check: arrow x-coordinates change by ≤ 2 px (sub-pixel rounding only) across 6 weeks of navigation.
+- **ShareMenu — Recently shared** memory:
+  - Persists last 3 platforms picked in `localStorage["tt:share:recent"]` (deduped, FIFO, capped at 3).
+  - Renders a "Recent" section at the top of the menu (vertical list of 3) followed by a dashed divider and an "All apps" section with the rest.
+  - When the user is searching (non-empty query), the Recent section is hidden so the filter operates over every platform.
+  - `recordShareUse(t.id)` is called inside `onTargetClick` after both the URL-share path AND the copy-only path so every share gets remembered.
+
+### Verified
+- ESLint clean
+- Numerical layout test: max label-x delta across 7 weeks = 2 px
+- Screenshot at week +6 shows no wrapping anywhere; full text visible
+- Pre-seeded localStorage shows the Recent section rendering above All apps

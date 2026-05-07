@@ -394,7 +394,7 @@ export default function GroupPage() {
                   <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
                 </button>
                 <span
-                  className="font-heading font-black text-xl sm:text-2xl whitespace-nowrap min-w-[200px] text-center tracking-tight"
+                  className="font-heading font-black text-xl sm:text-2xl whitespace-nowrap w-[220px] sm:w-[260px] text-center tracking-tight"
                   data-testid="week-snapshot-label"
                 >
                   {formatDateShort(week.monday)} → {formatDateShort(week.sunday)}
@@ -411,9 +411,9 @@ export default function GroupPage() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-3 shrink-0 w-[230px] justify-end">
                 <span
-                  className="text-sm font-bold uppercase tracking-wider"
+                  className="text-sm font-bold uppercase tracking-wider w-[120px] text-right whitespace-nowrap"
                   style={{ color: "var(--ink-soft)" }}
                   data-testid="week-offset-label"
                 >
@@ -423,16 +423,21 @@ export default function GroupPage() {
                     ? `${-weekOffset} week${weekOffset === -1 ? "" : "s"} ago`
                     : `${weekOffset} week${weekOffset === 1 ? "" : "s"} ahead`}
                 </span>
-                {weekOffset !== 0 && (
-                  <button
-                    type="button"
-                    className="neo-btn ghost text-sm"
-                    onClick={() => setWeekOffset(0)}
-                    data-testid="week-reset-btn"
-                  >
-                    This week
-                  </button>
-                )}
+                {/* Always rendered so the layout never reflows when navigating
+                    weeks; just hidden visually when the user is on this week. */}
+                <button
+                  type="button"
+                  className="neo-btn ghost text-sm whitespace-nowrap"
+                  onClick={() => setWeekOffset(0)}
+                  data-testid="week-reset-btn"
+                  aria-hidden={weekOffset === 0}
+                  tabIndex={weekOffset === 0 ? -1 : 0}
+                  style={{
+                    visibility: weekOffset === 0 ? "hidden" : "visible",
+                  }}
+                >
+                  This week
+                </button>
               </div>
             </div>
           )}

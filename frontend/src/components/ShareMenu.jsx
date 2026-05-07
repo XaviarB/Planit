@@ -57,6 +57,28 @@ export default function ShareMenu({ url, groupName }) {
   const [query, setQuery] = useState("");
   const popRef = useRef(null);
 
+  // Persist last 3 platforms the user picked so repeat shares are one tap.
+  const [recent, setRecent] = useState(() => {
+    try {
+      const raw = localStorage.getItem("tt:share:recent");
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter((x) => typeof x === "string").slice(0, 3) : [];
+    } catch {
+      return [];
+    }
+  });
+  const recordShareUse = (id) => {
+    setRecent((prev) => {
+      const next = [id, ...prev.filter((x) => x !== id)].slice(0, 3);
+      try {
+        localStorage.setItem("tt:share:recent", JSON.stringify(next));
+      } catch {
+        // localStorage may be blocked — recents simply won't persist.
+      }
+      return next;
+    });
+  };
+
   const text = buildText(groupName || "our group");
   const ctx = { u: url, t: text, group: groupName || "our group" };
   const hasNative = typeof navigator !== "undefined" && !!navigator.share;
@@ -92,6 +114,7 @@ export default function ShareMenu({ url, groupName }) {
       // Copy-only platforms (Discord, Slack, Instagram, etc.) — clipboard
       // is the entire payload, so we just copy and tell the user where to paste.
       await copyLink(t.copyHint || `Link copied — paste it in ${t.name}.`);
+      recordShareUse(t.id);
       return;
     }
 
@@ -105,6 +128,7 @@ export default function ShareMenu({ url, groupName }) {
     } else {
       toast.message(`Opening ${t.name}…`, { duration: 2000 });
     }
+    recordShareUse(t.id);
 
     const href = t.build(ctx);
     // mailto:/sms:/viber: schemes navigate the current tab; everything web opens new tab.
@@ -135,11 +159,17 @@ export default function ShareMenu({ url, groupName }) {
     }
   };
 
-  const filtered = query.trim()
-    ? TARGETS.filter((t) =>
-        t.name.toLowerCase().includes(query.trim().toLowerCase())
-      )
-    : TARGETS;
+  // Split the list: pinned "recents" up top, the rest below.
+  // When the user is searching, ignore the recent grouping and just filter
+  // across everything — searching means they know exactly what they want.
+  const q = query.trim().toLowerCase();
+  const recentTargets = q
+    ? []
+    : recent.map((id) => TARGETS.find((t) => t.id === id)).filter(Boolean);
+  const restTargets = q
+    ? TARGETS.filter((t) => t.name.toLowerCase().includes(q))
+    : TARGETS.filter((t) => !recent.includes(t.id));
+  const totalShown = recentTargets.length + restTargets.length;
 
   return (
     <div className="relative" ref={popRef} data-testid="share-menu-wrap">
@@ -218,13 +248,45 @@ export default function ShareMenu({ url, groupName }) {
             />
           </div>
 
-          {/* Vertical list — skinnier, longer. Each row = icon + name. */}
-          {filtered.length > 0 ? (
+          {/* Vertical list — skinnier, longer. Each row = icon + name.
+              Recent picks are pinned to the top for fast re-share. */}
+          {totalShown > 0 ? (
             <div
               className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1 -mr-1"
               data-testid="share-targets-scroller"
             >
-              {filtered.map((t) => (
+              {recentTargets.length > 0 && (
+                <>
+                  <div
+                    className="label-caps text-[10px] mb-1"
+                    style={{ color: "var(--ink-mute)" }}
+                    data-testid="share-recent-header"
+                  >
+                    Recent
+                  </div>
+                  {recentTargets.map((t) => (
+                    <BrandTile
+                      key={`recent-${t.id}`}
+                      target={t}
+                      onClick={() => onTargetClick(t)}
+                    />
+                  ))}
+                  <div
+                    className="my-2 border-t-2 border-dashed"
+                    style={{ borderColor: "var(--ink)", opacity: 0.25 }}
+                    aria-hidden="true"
+                  />
+                </>
+              )}
+              {recentTargets.length > 0 && restTargets.length > 0 && !q && (
+                <div
+                  className="label-caps text-[10px] mb-1"
+                  style={{ color: "var(--ink-mute)" }}
+                >
+                  All apps
+                </div>
+              )}
+              {restTargets.map((t) => (
                 <BrandTile
                   key={t.id}
                   target={t}

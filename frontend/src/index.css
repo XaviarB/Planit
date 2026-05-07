@@ -70,13 +70,16 @@ body {
     text-transform: uppercase;
 }
 
-/* Planet logo — globe static, ring of dots orbits, stars sparkle randomly */
-@keyframes ring-spin {
+/* Planet logo
+   - Ring of dots stays STILL (a static halo around the globe).
+   - Globe spins around its Y axis ONLY while the logo is hovered.
+   - Stars sit close to the globe, dim at rest, twinkle only on hover. */
+@keyframes globe-spin-y {
     from {
-        transform: rotateZ(0deg);
+        transform: rotateY(0deg);
     }
     to {
-        transform: rotateZ(360deg);
+        transform: rotateY(360deg);
     }
 }
 @keyframes star-twinkle {
@@ -99,15 +102,16 @@ body {
     }
 }
 .planet-logo-wrap {
-    cursor: default;
-    perspective: 240px;
+    cursor: pointer;
+    perspective: 360px;
     perspective-origin: 50% 50%;
 }
 .planet-logo-wrap svg {
     transform-style: preserve-3d;
     overflow: visible;
 }
-/* Ring dots orbit around the globe (tilted plane + continuous Z-axis rotation) */
+/* Static halo — no spin. The X-axis tilt + Z-axis rotation give the orbit
+   its perspective look without animation. */
 .ring-orbit {
     transform-origin: 16px 16px;
     transform-box: view-box;
@@ -118,18 +122,30 @@ body {
 .ring-spin {
     transform-origin: 16px 16px;
     transform-box: view-box;
-    transform-style: preserve-3d;
-    animation: ring-spin 6s linear infinite;
 }
 .ring-spin circle {
     fill: #0f172a;
 }
-/* Stars sparkle continuously — inline styles set per-star delay/duration for non-symmetric feel */
+/* Globe sits centered. The Y-axis rotation animation is OFF by default and
+   only kicks in while the user hovers the logo wrapper. */
+.planet-globe {
+    transform-origin: 16px 16px;
+    transform-box: view-box;
+    transform-style: preserve-3d;
+    backface-visibility: visible;
+}
+.planet-logo-wrap:hover .planet-globe {
+    animation: globe-spin-y 4s linear infinite;
+}
+/* Stars: dim & still by default, twinkle only when the logo is hovered. */
 .planet-stars circle {
     transform-origin: center;
     transform-box: fill-box;
-    opacity: 0;
+    opacity: 0.18;
     fill: #f1c40f;
+    transition: opacity 0.25s ease;
+}
+.planet-logo-wrap:hover .planet-stars circle {
     animation: star-twinkle 2s ease-in-out infinite;
 }
 

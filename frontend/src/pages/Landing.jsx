@@ -56,19 +56,8 @@ export default function Landing() {
       const { group, member_id } = await createGroup(groupName.trim(), creatorName.trim());
       setLocalMemberId(group.code, member_id);
       addVisitedGroup({ code: group.code, name: group.name });
-
-      // Pre-emptively copy the invite link to the user's clipboard. The Group
-      // page will also show a "copied" toast — auto-share is one less click.
-      const inviteUrl = `${window.location.origin}/g/${group.code}`;
-      try {
-        await navigator.clipboard.writeText(inviteUrl);
-      } catch {
-        // Clipboard may be blocked; the Group page will still expose Copy buttons.
-      }
-
-      toast.success(`Group "${group.name}" created — invite link copied!`);
-      // Pass justCreated so /g/{code} can re-confirm the auto-copy.
-      nav(`/g/${group.code}`, { state: { justCreated: true } });
+      toast.success(`Group "${group.name}" created!`);
+      nav(`/g/${group.code}`);
     } catch (err) {
       toast.error("Could not create group. Try again.");
     } finally {
@@ -355,9 +344,11 @@ export default function Landing() {
   );
 }
 
-// --- Planet logo: static globe, orbiting dot-ring, randomly twinkling stars ---
+// --- Planet logo: ring is static, globe spins around its Y axis ON HOVER,
+//     stars are tucked close to the globe and only twinkle on hover ---
 function PlanetIcon() {
-  // 24 dots evenly distributed on a circle (then tilted via CSS rotateX into an ellipse)
+  // 24 dots evenly distributed on a circle (then tilted via CSS rotateX into an ellipse).
+  // The ring no longer spins — it sits as a static halo around the globe.
   const RING_DOT_COUNT = 24;
   const RING_RADIUS = 9.6;
   const ringDots = Array.from({ length: RING_DOT_COUNT }, (_, i) => {
@@ -369,20 +360,22 @@ function PlanetIcon() {
     };
   });
 
-  // Hand-placed star positions — intentionally non-symmetric, varied size + timing
+  // Stars now hug the globe: a tight band ~7-12 from center, hand-placed for
+  // an unsymmetric, non-grid feel. They are dim by default and only twinkle
+  // when the user hovers the logo.
   const stars = [
-    { cx: 3.0,  cy: 5.5,  r: 1.0,  d: "0s",    dur: "1.8s" },
-    { cx: 28.4, cy: 2.6,  r: 0.85, d: "0.6s",  dur: "2.4s" },
-    { cx: 30.4, cy: 11.2, r: 0.75, d: "1.2s",  dur: "2.1s" },
-    { cx: 1.6,  cy: 14.5, r: 0.95, d: "0.3s",  dur: "2.7s" },
-    { cx: 6.4,  cy: 27.6, r: 0.7,  d: "1.5s",  dur: "1.9s" },
-    { cx: 26.0, cy: 29.0, r: 0.9,  d: "0.9s",  dur: "2.3s" },
-    { cx: 14.0, cy: 1.4,  r: 0.65, d: "1.8s",  dur: "2.0s" },
-    { cx: 30.6, cy: 22.4, r: 0.8,  d: "0.45s", dur: "2.6s" },
-    { cx: 2.2,  cy: 24.3, r: 0.75, d: "1.1s",  dur: "1.7s" },
-    { cx: 18.2, cy: 30.3, r: 0.7,  d: "0.15s", dur: "2.5s" },
-    { cx: 9.6,  cy: 3.2,  r: 0.6,  d: "1.35s", dur: "2.2s" },
-    { cx: 23.0, cy: 25.4, r: 0.85, d: "0.75s", dur: "1.85s" },
+    { cx: 8.0,  cy: 8.5,  r: 0.65, d: "0s",    dur: "1.8s" },
+    { cx: 24.0, cy: 7.6,  r: 0.55, d: "0.6s",  dur: "2.4s" },
+    { cx: 25.6, cy: 14.5, r: 0.5,  d: "1.2s",  dur: "2.1s" },
+    { cx: 6.4,  cy: 14.0, r: 0.6,  d: "0.3s",  dur: "2.7s" },
+    { cx: 8.5,  cy: 23.4, r: 0.55, d: "1.5s",  dur: "1.9s" },
+    { cx: 23.6, cy: 23.6, r: 0.6,  d: "0.9s",  dur: "2.3s" },
+    { cx: 16.0, cy: 5.4,  r: 0.45, d: "1.8s",  dur: "2.0s" },
+    { cx: 26.0, cy: 19.4, r: 0.5,  d: "0.45s", dur: "2.6s" },
+    { cx: 5.8,  cy: 19.6, r: 0.55, d: "1.1s",  dur: "1.7s" },
+    { cx: 16.0, cy: 26.6, r: 0.5,  d: "0.15s", dur: "2.5s" },
+    { cx: 11.2, cy: 5.8,  r: 0.4,  d: "1.35s", dur: "2.2s" },
+    { cx: 20.6, cy: 26.4, r: 0.5,  d: "0.75s", dur: "1.85s" },
   ];
 
   return (

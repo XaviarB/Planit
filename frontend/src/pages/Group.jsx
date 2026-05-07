@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   getGroup,
@@ -19,13 +19,13 @@ import LegendEditor from "../components/LegendEditor";
 import GroupMenu from "../components/GroupMenu";
 import SuggestMeeting from "../components/SuggestMeeting";
 import MembersSchedule from "../components/MembersSchedule";
+import ShareMenu from "../components/ShareMenu";
 import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function GroupPage() {
   const { code } = useParams();
   const nav = useNavigate();
-  const location = useLocation();
   const [group, setGroup] = useState(null);
   const [memberId, setMemberId] = useState(getLocalMemberId(code));
   const [loading, setLoading] = useState(true);
@@ -104,24 +104,6 @@ export default function GroupPage() {
     refresh();
   }, [refresh]);
 
-  // Auto-copy invite link when the user has just created a group (passed via
-  // location.state from Landing) — one-tap shareable link with no extra click.
-  useEffect(() => {
-    if (!loading && group && location.state && location.state.justCreated) {
-      const url = `${window.location.origin}/g/${code}`;
-      try {
-        navigator.clipboard.writeText(url);
-        toast.success("Invite link copied — paste it to your crew!", {
-          duration: 4500,
-        });
-      } catch {
-        // Clipboard may be blocked; ignore — share button still works.
-      }
-      // Clear the flag so subsequent navigations don't re-copy.
-      nav(location.pathname, { replace: true, state: {} });
-    }
-  }, [loading, group, location, code, nav]);
-
   // If no local member id, prompt to join
   useEffect(() => {
     if (!loading && group && !memberId) setJoinOpen(true);
@@ -144,10 +126,6 @@ export default function GroupPage() {
     }
   };
 
-  const onCopyLink = () => {
-    const url = `${window.location.origin}/g/${code}`;
-    navigator.clipboard.writeText(url).then(() => toast.success("Invite link copied!"));
-  };
   const onCopyCode = () => {
     navigator.clipboard.writeText(code).then(() => toast.success("Code copied!"));
   };
@@ -367,13 +345,10 @@ export default function GroupPage() {
               <Share2 className="w-4 h-4" /> Invite friends
             </div>
             <div className="flex flex-col gap-2">
-              <button
-                className="neo-btn pastel flex items-center justify-center gap-2 text-sm w-full"
-                onClick={onCopyLink}
-                data-testid="copy-link-btn"
-              >
-                <Share2 className="w-4 h-4" /> Share link
-              </button>
+              <ShareMenu
+                url={`${window.location.origin}/g/${code}`}
+                groupName={group.name}
+              />
               <button
                 className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
                 onClick={onCopyCode}

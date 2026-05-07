@@ -149,3 +149,33 @@ Build a website that can group you and your friends schedules with time slots an
 - Light + dark visually confirmed via screenshots (heatmap, legend, slider, editor, landing)
 - Backend create returns `heat_colors=['#0f0224','#7b1fe3','#c026d3','#e879f9','#fae8ff']`
 - ESLint + Ruff clean
+
+---
+
+## Iteration — 7 May 2026 · part 2 (share menu + logo polish)
+
+### Changes
+- **Removed** the auto-copy invite link on group creation (in `Landing.onCreate` and the `justCreated` effect in `Group.jsx`). `useLocation` import + the unused `onCopyLink` helper were also removed.
+- **New `ShareMenu` component** (`/frontend/src/components/ShareMenu.jsx`) — replaces the old single-purpose "Share link" button in the group-page sidebar.
+  - 31 share targets (URL share intents + copy-only fallbacks):
+    WhatsApp, iMessage/SMS, Telegram, Email (Gmail), X / Twitter, Facebook, Messenger, LinkedIn, Reddit, Discord*, Slack*, Microsoft Teams, Skype, Viber, LINE, KakaoTalk*, WeChat*, QQ, Snapchat, Instagram DM*, TikTok DM*, Threads, Bluesky, Mastodon, Tumblr, Pinterest, Pocket, Hacker News, VK, Weibo, Google Chat*.
+    *(* = copy-only with a context-aware toast, since those platforms have no public URL share intent.)
+  - Pre-filled invite text: `Drop your busy hours into "{groupName}" on Planit so we can find a time that works:` followed by the link.
+  - Brand icons pulled lazily from `cdn.simpleicons.org/{slug}/{color}` so we don't bundle 30+ SVGs.
+  - Web Share API "Open device share sheet" button shown only if `navigator.share` exists (mobile/PWA).
+  - Search filter input ("Search 30+ apps…") for fast lookup.
+- **Logo redesign** (`PlanetIcon` + `index.css`):
+  - Globe is static at rest; on `:hover .planet-globe` runs `globe-spin-y 4s linear infinite` (rotateY 0 → 360°).
+  - Ring of orbital dots is now a STATIC halo (`ring-spin` keyframes deleted, only the rotateZ/rotateX tilt remains).
+  - Stars repositioned tightly around the globe (band ~7-12 from center) and dimmed to `opacity: 0.18` at rest. They only twinkle while the logo is hovered.
+
+### Files touched
+- `frontend/src/components/ShareMenu.jsx` (new)
+- `frontend/src/pages/Group.jsx` — wire up ShareMenu, drop unused `useLocation` + `onCopyLink`
+- `frontend/src/pages/Landing.jsx` — revert auto-copy, repositioned `stars` array
+- `frontend/src/index.css` — globe-spin-y keyframes, hover-only animations, dim-by-default stars
+
+### Verified
+- ESLint clean across all 4 files
+- Share menu opens, lists 31 tiles, search filter works ("what" → 1 result)
+- Logo hover triggers globe rotation; idle shows static halo + dim stars

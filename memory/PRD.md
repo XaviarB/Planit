@@ -194,3 +194,21 @@ Build a website that can group you and your friends schedules with time slots an
 ### Verified
 - ESLint clean across all touched files
 - Side-by-side screenshots: sidebar order correct (QuickStats top, Members bottom); week banner has bigger fonts + only arrow buttons; share menu scroller shows 4 tiles + scroll hint; closing slogan is the visual anchor of the page
+
+---
+
+## Iteration — 7 May 2026 · part 4 (share menu pivot, stagger, range chips)
+
+### Changes
+- **ShareMenu** is now a **vertical list** anchored to the LEFT of the trigger button (`left-0 right-auto w-[240–260px]`). Each brand tile is a horizontal `icon + label` row, clicked to launch the share intent. Search input still filters across all 31 platforms.
+- **Sidebar stagger** — added staggered `pop-in` entrance animation across the four cards (Quick stats / Invite / Legend / Members) at delays `0ms → 80ms → 160ms → 240ms`. Updated `.pop-in` fill mode from `both` to `backwards` so the card's `:hover` transform still works after the entrance animation finishes.
+- **Date-range bar redesigned** as minimalist chip presets (`RangeChipBar` + `Chip` helpers in `Group.jsx`).
+  - Date presets: `This week`, `Next 7 days`, `Next 14 days`, `Custom…`
+  - Hour presets: `All day`, `Morning`, `Afternoon`, `Evening`, `Custom…`
+  - Custom inputs (date pickers / hour selects) only appear when the user explicitly clicks `Custom…` — keeps the default state to two clean rows of pills.
+
+### Verified
+- ESLint clean
+- Members' schedule view shows the new chip bar
+- Share dropdown anchors left, vertical list scrolls inside `max-h-[420px]`
+- Sidebar cards animate in sequence on mount

@@ -374,7 +374,7 @@ html.dark .bg-slate-900\/50 {
     }
 }
 .pop-in {
-    animation: pop-in 0.4s ease both;
+    animation: pop-in 0.4s ease backwards;
 }
 
 /* hide scrollbar nicely */

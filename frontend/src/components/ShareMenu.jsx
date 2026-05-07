@@ -132,7 +132,7 @@ export default function ShareMenu({ url, groupName }) {
 
       {open && (
         <div
-          className="absolute z-50 mt-2 left-0 right-0 sm:left-auto sm:right-0 sm:w-[360px] neo-card p-4"
+          className="absolute z-50 mt-2 left-0 right-auto w-[240px] sm:w-[260px] neo-card p-3"
           style={{ background: "var(--card)" }}
           data-testid="share-menu-dropdown"
           role="dialog"
@@ -194,19 +194,19 @@ export default function ShareMenu({ url, groupName }) {
             />
           </div>
 
-          {/* Horizontal scroller — keeps the menu compact. Swipe / drag / wheel.
-              Search filters this same list for users who know exactly what they want. */}
+          {/* Vertical list — skinnier, longer. Each row = icon + name. */}
           {filtered.length > 0 ? (
-            <div className="share-scroller" data-testid="share-targets-scroller">
-              <div className="flex gap-3 px-0.5">
-                {filtered.map((t) => (
-                  <BrandTile
-                    key={t.id}
-                    target={t}
-                    onClick={() => onTargetClick(t)}
-                  />
-                ))}
-              </div>
+            <div
+              className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1 -mr-1"
+              data-testid="share-targets-scroller"
+            >
+              {filtered.map((t) => (
+                <BrandTile
+                  key={t.id}
+                  target={t}
+                  onClick={() => onTargetClick(t)}
+                />
+              ))}
             </div>
           ) : (
             <div
@@ -216,15 +216,6 @@ export default function ShareMenu({ url, groupName }) {
             >
               No matches — try "WhatsApp", "Email", "Discord"…
             </div>
-          )}
-
-          {filtered.length > 0 && (
-            <p
-              className="mt-2 text-[10px] text-center label-caps"
-              style={{ color: "var(--ink-mute)" }}
-            >
-              ← scroll for more →
-            </p>
           )}
         </div>
       )}
@@ -238,31 +229,29 @@ function BrandTile({ target, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col items-center justify-start gap-1.5 shrink-0 w-[68px] snap-start"
+      className="group flex items-center gap-3 w-full p-1.5 rounded-lg border-2 border-transparent hover:border-slate-900 hover:bg-[var(--pastel-mint)] transition text-left"
       data-testid={`share-target-${target.id}`}
       title={`Share via ${target.name}`}
-      style={{ scrollSnapAlign: "start" }}
     >
       <span
-        className="w-12 h-12 rounded-xl grid place-items-center shrink-0 border-2 transition group-hover:scale-[1.08] group-hover:-translate-y-0.5"
+        className="w-9 h-9 rounded-lg grid place-items-center shrink-0 border-2 transition group-hover:scale-[1.06]"
         style={{
           background: `#${target.color}`,
           borderColor: "var(--ink)",
-          boxShadow: "2px 2px 0 0 var(--ink)",
         }}
       >
         <img
           src={iconUrl}
           alt={target.name}
-          className="w-6 h-6"
-          width="24"
-          height="24"
+          className="w-5 h-5"
+          width="20"
+          height="20"
           loading="lazy"
           referrerPolicy="no-referrer"
         />
       </span>
       <span
-        className="text-[10px] font-bold leading-tight text-center line-clamp-2 w-full"
+        className="text-sm font-bold leading-tight flex-1 min-w-0 truncate"
         style={{ color: "var(--ink)" }}
       >
         {target.name}

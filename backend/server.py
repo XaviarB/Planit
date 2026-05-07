@@ -21,6 +21,9 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Astral concierge — imported AFTER load_dotenv so the LLM key is visible.
+from astral import parse_busy_text, suggest_hangouts, draft_invite  # noqa: E402
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
@@ -58,6 +61,10 @@ class Member(BaseModel):
     name: str
     color: str = "#1ABC9C"
     slots: List[AvailabilitySlot] = []
+    # Optional per-member location override (e.g. "Bushwick, NY"). Falls back
+    # to the group's base location when absent. Astral uses this to better
+    # tune suggestions to whoever's actually showing up.
+    location: Optional[str] = None
     joined_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -65,6 +72,9 @@ class Group(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     code: str
     name: str
+    # Optional group "home base" location (e.g. "Brooklyn, NY"). Used by
+    # Astral to ground hangout suggestions in real venues nearby.
+    location: Optional[str] = None
     members: List[Member] = []
     reasons: List[BusyReason] = []
     heat_colors: List[str] = Field(default_factory=lambda: [
@@ -81,6 +91,7 @@ class Group(BaseModel):
 class CreateGroupReq(BaseModel):
     group_name: str
     creator_name: str
+    location: Optional[str] = None  # optional group home base
 
 
 class JoinGroupReq(BaseModel):
@@ -97,12 +108,40 @@ class CreateReasonReq(BaseModel):
 
 
 class RenameMemberReq(BaseModel):
-    name: str
+    name: Optional[str] = None
+    location: Optional[str] = None  # also used to update per-member location
 
 
 class UpdateGroupReq(BaseModel):
     name: Optional[str] = None
+    location: Optional[str] = None
     heat_colors: Optional[List[str]] = None
+
+
+# ---------- Astral request models ----------
+
+class AstralParseBusyReq(BaseModel):
+    text: str
+    anchor_iso: Optional[str] = None  # defaults to today UTC
+
+
+class AstralSuggestReq(BaseModel):
+    # Time window the user wants suggestions for (free-form, e.g. "Sat 7-11pm").
+    window_blurb: str
+    # Optional: which member ids are participating in this window. If empty,
+    # all members are assumed in.
+    participant_ids: Optional[List[str]] = None
+    # Optional override of the location to ground suggestions in. Falls back
+    # to the group's base location.
+    location_override: Optional[str] = None
+    # Optional inside-joke history blurb the UI may pass ("we tried tuesday
+    # last time and 2 of you flaked").
+    history_blurb: Optional[str] = None
+
+
+class AstralDraftInviteReq(BaseModel):
+    suggestion: Dict
+    window_blurb: str
 
 
 # ---------- Helpers ----------
@@ -134,11 +173,16 @@ async def create_group(req: CreateGroupReq):
         if not await db.groups.find_one({"code": code}):
             break
 
-    creator = Member(name=req.creator_name.strip() or "Anon", color=random_member_color(0))
+    creator = Member(
+        name=req.creator_name.strip() or "Anon",
+        color=random_member_color(0),
+        location=(req.location or "").strip() or None,
+    )
     reasons = [BusyReason(**r) for r in DEFAULT_REASONS]
     group = Group(
         code=code,
         name=req.group_name.strip() or "Untitled Group",
+        location=(req.location or "").strip() or None,
         members=[creator],
         reasons=reasons,
     )
@@ -163,6 +207,9 @@ async def update_group(code: str, req: UpdateGroupReq):
     update: Dict = {}
     if req.name is not None:
         update["name"] = req.name.strip() or "Untitled Group"
+    if req.location is not None:
+        # Empty string clears the location.
+        update["location"] = req.location.strip() or None
     if req.heat_colors is not None:
         if len(req.heat_colors) != 5:
             raise HTTPException(status_code=400, detail="heat_colors must have 5 entries")
@@ -233,11 +280,77 @@ async def update_slots(code: str, member_id: str, req: UpdateSlotsReq):
 @api_router.put("/groups/{code}/members/{member_id}")
 async def rename_member(code: str, member_id: str, req: RenameMemberReq):
     await find_group(code)
+    set_doc: Dict = {}
+    if req.name is not None:
+        set_doc["members.$.name"] = req.name.strip() or "Friend"
+    if req.location is not None:
+        # Empty string clears the per-member location.
+        set_doc["members.$.location"] = req.location.strip() or None
+    if not set_doc:
+        return {"ok": True}
     await db.groups.update_one(
         {"code": code.upper(), "members.id": member_id},
-        {"$set": {"members.$.name": req.name.strip() or "Friend"}}
+        {"$set": set_doc}
     )
     return {"ok": True}
+
+
+# ---------- Astral concierge endpoints ----------
+
+@api_router.post("/groups/{code}/astral/parse-busy")
+async def astral_parse_busy(code: str, req: AstralParseBusyReq):
+    """Natural-language → list of busy slots. Member is responsible for merging
+    into their existing slot list (frontend keeps the editor's UX in charge)."""
+    await find_group(code)
+    anchor = (req.anchor_iso or datetime.now(timezone.utc).isoformat())[:10]
+    slots = await parse_busy_text(req.text or "", anchor)
+    return {"slots": slots, "count": len(slots)}
+
+
+@api_router.post("/groups/{code}/astral/suggest")
+async def astral_suggest(code: str, req: AstralSuggestReq):
+    """Generate up to 3 hangout suggestion cards with buzz quotes."""
+    g = await find_group(code)
+
+    members = g.get("members", []) or []
+    participant_ids = req.participant_ids or [m["id"] for m in members]
+    participants = [m for m in members if m["id"] in participant_ids]
+    member_count = len(participants) or len(members)
+
+    # Build a short members blurb so Astral can lightly tailor (names + areas).
+    parts = []
+    for m in participants[:8]:
+        bit = m.get("name") or "friend"
+        loc = m.get("location") or ""
+        if loc:
+            bit += f" ({loc})"
+        parts.append(bit)
+    members_blurb = ", ".join(parts) if parts else None
+
+    location = (req.location_override or g.get("location") or "").strip() or None
+
+    out = await suggest_hangouts(
+        window_blurb=req.window_blurb or "open window",
+        member_count=member_count,
+        location=location,
+        group_name=g.get("name") or "the group",
+        history_blurb=req.history_blurb,
+        member_summaries=members_blurb,
+    )
+    out["used_location"] = location
+    out["participant_count"] = member_count
+    return out
+
+
+@api_router.post("/groups/{code}/astral/draft-invite")
+async def astral_draft_invite(code: str, req: AstralDraftInviteReq):
+    g = await find_group(code)
+    msg = await draft_invite(
+        suggestion=req.suggestion or {},
+        group_name=g.get("name") or "the group",
+        window_blurb=req.window_blurb or "later",
+    )
+    return {"message": msg}
 
 
 @api_router.post("/groups/{code}/reasons")

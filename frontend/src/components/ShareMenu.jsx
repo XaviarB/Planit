@@ -60,7 +60,9 @@ export default function ShareMenu({ url, groupName }) {
   // Persist last 3 platforms the user picked so repeat shares are one tap.
   const [recent, setRecent] = useState(() => {
     try {
-      const raw = localStorage.getItem("tt:share:recent");
+      const raw =
+        localStorage.getItem("planit:share:recent") ||
+        localStorage.getItem("tt:share:recent");
       const arr = raw ? JSON.parse(raw) : [];
       return Array.isArray(arr) ? arr.filter((x) => typeof x === "string").slice(0, 3) : [];
     } catch {
@@ -71,7 +73,7 @@ export default function ShareMenu({ url, groupName }) {
     setRecent((prev) => {
       const next = [id, ...prev.filter((x) => x !== id)].slice(0, 3);
       try {
-        localStorage.setItem("tt:share:recent", JSON.stringify(next));
+        localStorage.setItem("planit:share:recent", JSON.stringify(next));
       } catch {
         // localStorage may be blocked — recents simply won't persist.
       }

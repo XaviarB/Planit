@@ -27,6 +27,7 @@ export default function Landing() {
   const nav = useNavigate();
   const [groupName, setGroupName] = useState("");
   const [creatorName, setCreatorName] = useState("");
+  const [groupLocation, setGroupLocation] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [joinName, setJoinName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -53,7 +54,11 @@ export default function Landing() {
     }
     setCreating(true);
     try {
-      const { group, member_id } = await createGroup(groupName.trim(), creatorName.trim());
+      const { group, member_id } = await createGroup(
+        groupName.trim(),
+        creatorName.trim(),
+        groupLocation.trim() || null
+      );
       setLocalMemberId(group.code, member_id);
       addVisitedGroup({ code: group.code, name: group.name });
       toast.success(`Group "${group.name}" created!`);
@@ -170,11 +175,20 @@ export default function Landing() {
                 data-testid="create-group-name-input"
               />
               <input
-                className="neo-input w-full mb-4"
+                className="neo-input w-full mb-3"
                 placeholder="Your display name"
                 value={creatorName}
                 onChange={(e) => setCreatorName(e.target.value)}
                 data-testid="create-creator-name-input"
+              />
+              <input
+                className="neo-input w-full mb-4"
+                placeholder="City / area for Astral (optional, e.g. Brooklyn, NY)"
+                value={groupLocation}
+                onChange={(e) => setGroupLocation(e.target.value)}
+                data-testid="create-location-input"
+                title="Astral uses this to suggest real venues nearby. You can change it later."
+                maxLength={80}
               />
               <button
                 type="submit"

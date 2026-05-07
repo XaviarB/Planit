@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
-const STORAGE_KEY = "tt:theme";
+const STORAGE_KEY = "planit:theme";
 
 function applyTheme(theme) {
   const root = document.documentElement;

@@ -21,7 +21,8 @@ import GroupMenu from "../components/GroupMenu";
 import SuggestMeeting from "../components/SuggestMeeting";
 import MembersSchedule from "../components/MembersSchedule";
 import ShareMenu from "../components/ShareMenu";
-import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
+import AstralDrawer from "../components/AstralDrawer";
+import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function GroupPage() {
@@ -49,6 +50,9 @@ export default function GroupPage() {
   const [joinOpen, setJoinOpen] = useState(false);
   const editorRef = useRef(null);
   const [savingExit, setSavingExit] = useState(false);
+  // Astral concierge drawer
+  const [astralOpen, setAstralOpen] = useState(false);
+  const [astralWindow, setAstralWindow] = useState("");
 
   // Persist view state changes to localStorage.
   useEffect(() => {
@@ -255,6 +259,19 @@ export default function GroupPage() {
             groupName={group.name}
             groupCode={group.code}
           />
+          <button
+            type="button"
+            className="astral-trigger text-sm"
+            onClick={() => {
+              setAstralWindow("");
+              setAstralOpen(true);
+            }}
+            data-testid="open-astral-btn"
+            title="Ask Astral — Planit's hangout concierge"
+          >
+            <Sparkles className="astral-spark" strokeWidth={2.5} />
+            Ask Astral
+          </button>
           <button
             className={`neo-btn text-sm ${editMode ? "" : "ghost"}`}
             onClick={onDoneEditing}
@@ -556,6 +573,16 @@ export default function GroupPage() {
           </form>
         </div>
       )}
+
+      {/* Astral concierge drawer */}
+      <AstralDrawer
+        open={astralOpen}
+        onClose={() => setAstralOpen(false)}
+        group={group}
+        memberId={memberId}
+        suggestedWindow={astralWindow}
+        onGroupUpdate={(g) => setGroup((prev) => ({ ...prev, ...g }))}
+      />
     </div>
   );
 }

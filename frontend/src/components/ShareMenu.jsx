@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Share2, Copy, X, Search, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import { copyToClipboard } from "../lib/clipboard";
 
 /**
  * ShareMenu — pre-filled invite link blast across every popular platform.
@@ -77,16 +78,18 @@ export default function ShareMenu({ url, groupName }) {
     };
   }, [open]);
 
-  const copyLink = (hint) => {
-    navigator.clipboard
-      .writeText(url)
-      .then(() => toast.success(hint || "Invite link copied!"))
-      .catch(() => toast.error("Couldn't copy — long-press the link instead."));
+  const copyLink = async (hint) => {
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      toast.success(hint || "Invite link copied!");
+    } else {
+      toast.error("Couldn't copy automatically — long-press the link to copy.");
+    }
   };
 
-  const onTargetClick = (t) => {
+  const onTargetClick = async (t) => {
     if (!t.build) {
-      copyLink(t.copyHint || `Link copied — paste it in ${t.name}.`);
+      await copyLink(t.copyHint || `Link copied — paste it in ${t.name}.`);
       return;
     }
     const href = t.build(ctx);
@@ -106,8 +109,15 @@ export default function ShareMenu({ url, groupName }) {
         text,
         url,
       });
-    } catch {
-      // user cancelled — silently ignore
+    } catch (err) {
+      if (err && err.name === "AbortError") return; // user cancelled
+      // Native share blocked (iframe / unsupported) → fall back to clipboard.
+      const ok = await copyToClipboard(url);
+      if (ok) {
+        toast.success("Share sheet unavailable — invite link copied instead!");
+      } else {
+        toast.error("Couldn't share or copy. Long-press the link above to copy.");
+      }
     }
   };
 

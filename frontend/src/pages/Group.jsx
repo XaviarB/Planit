@@ -12,6 +12,7 @@ import {
   setGroupViewState,
 } from "../lib/api";
 import { dateRange, formatDateShort, currentWeekBounds } from "../lib/schedule";
+import { copyToClipboard } from "../lib/clipboard";
 import HeatmapGrid from "../components/HeatmapGrid";
 import AvailabilityEditor from "../components/AvailabilityEditor";
 import QuickStats from "../components/QuickStats";
@@ -67,24 +68,6 @@ export default function GroupPage() {
     const id = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(id);
   }, []);
-
-  // Track current theme so we can swap the heatmap palette.
-  // Light mode → neon purple gradient (stored heat_colors, default = purple).
-  // Dark  mode → neon blue gradient (always, even if user customized in light).
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark")
-  );
-  useEffect(() => {
-    const target = document.documentElement;
-    const obs = new MutationObserver(() => {
-      setIsDark(target.classList.contains("dark"));
-    });
-    obs.observe(target, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  // Neon blue gradient — used for the dark-mode heatmap regardless of stored colors.
-  const NEON_BLUE_PALETTE = ["#020617", "#1e40af", "#0ea5e9", "#22d3ee", "#cffafe"];
   const [joinName, setJoinName] = useState("");
 
   const refresh = useCallback(async () => {
@@ -126,8 +109,11 @@ export default function GroupPage() {
     }
   };
 
-  const onCopyCode = () => {
-    navigator.clipboard.writeText(code).then(() => toast.success("Code copied!"));
+  const onCopyCode = async () => {
+    const ok = await copyToClipboard(code);
+    toast[ok ? "success" : "error"](
+      ok ? "Code copied!" : "Couldn't copy — please copy the code manually."
+    );
   };
 
   if (loading) return <div className="p-10 text-center" data-testid="group-loading">Loading group…</div>;
@@ -321,11 +307,7 @@ export default function GroupPage() {
           </div>
 
           <div className="pop-in" style={{ animationDelay: "160ms" }}>
-            <LegendEditor
-              code={code}
-              colors={group.heat_colors || ["#0f0224", "#7b1fe3", "#c026d3", "#e879f9", "#fae8ff"]}
-              onUpdated={(next) => setGroup((g) => ({ ...g, heat_colors: next }))}
-            />
+            <LegendEditor />
           </div>
 
           <div className="neo-card p-5 pop-in" style={{ animationDelay: "240ms" }} data-testid="members-card">
@@ -537,7 +519,7 @@ export default function GroupPage() {
               hourFrom={0}
               hourTo={23}
               minuteStep={60}
-              heatColors={isDark ? NEON_BLUE_PALETTE : group.heat_colors}
+              heatColors={undefined}
               focusMode={focusedMembers.length > 0}
               compareCount={focusedMembers.length}
             />

@@ -228,3 +228,25 @@ Build a website that can group you and your friends schedules with time slots an
 - Homepage screenshot shows hero immediately followed by the bottom section (no white desert between them)
 - Group page screenshot shows the share dropdown cleanly painted over everything below it
 - Logo: hover → spin starts; mouse leave mid-spin → globe completes its current revolution and stops at 0°
+
+---
+
+## Iteration — 7 May 2026 · part 6 (palette swap, static legend, clipboard fix)
+
+### Changes
+- **Light-mode heatmap palette swapped to neon orange/red gradient**:
+  `#1f0500 → #dc2626 → #fb923c → #fcd34d → #fffbeb`. Backend defaults + backfill updated to the same set.
+  Dark mode remains the existing neon-blue gradient.
+- **Heatmap palette is now driven entirely by CSS variables** — `Group.jsx` no longer overrides the palette per theme. Removed the `MutationObserver`, `isDark` state, and `NEON_BLUE_PALETTE` array. `HeatmapGrid` is passed `heatColors={undefined}` so it falls back to `var(--heat-*)` which auto-flips with the theme.
+- **`LegendEditor` is now a static `LegendDisplay`** — overwritten with a read-only component (5 swatches + labels driven by CSS vars). No more customize/reset/apply buttons. The component still exports default and is imported with the same name so call sites didn't move.
+- **Clipboard fix** — added `/lib/clipboard.js` with `copyToClipboard(text)` that:
+  1. Tries `navigator.clipboard.writeText` (modern API, secure context),
+  2. Falls back to a hidden `<textarea>` + `document.execCommand("copy")` — works inside the Emergent preview iframe where the modern API is blocked by Permissions-Policy.
+  All three call sites switched to it: `ShareMenu.copyLink`, `ShareMenu.onTargetClick` (copy-only platforms), `Group.onCopyCode`.
+- **Native share-sheet error handling** — `ShareMenu.onNativeShare` now distinguishes `AbortError` (user cancelled) from real failures. On real failure (iframe-blocked, etc.) it falls back to clipboard copy and tells the user via a toast.
+
+### Verified
+- ESLint + Ruff clean
+- Backend health OK; new groups receive the new orange/red defaults
+- Light/dark screenshots show the new palettes + static legend
+- Functional clipboard test: clicking "Copy" inside the share menu shows `"Invite link copied!"` toast even though `navigator.clipboard.readText` is blocked in the iframe (proving the fallback works)

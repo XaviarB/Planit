@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   Sparkles, X, Send, MapPin, Star, ExternalLink, MessageSquare,
   Loader2, Compass, Quote, ChevronDown, Tag, AlertTriangle, Lock,
+  Shuffle,
 } from "lucide-react";
 import {
   astralSuggest,
@@ -12,6 +13,23 @@ import {
 } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
 import { LockInModal } from "./Hangouts";
+
+// Remix presets — keys MUST match REMIX_PRESETS in backend/astral.py.
+// Labels are the short chip captions shown in the drawer.
+const REMIX_CHIPS = [
+  { key: "cheaper",                label: "cheaper" },
+  { key: "fancier",                label: "fancier" },
+  { key: "different_neighborhood", label: "diff. nbhd" },
+  { key: "different_vibe",         label: "diff. vibe" },
+  { key: "more_chill",             label: "more chill" },
+  { key: "more_lit",               label: "more lit" },
+  { key: "with_food",              label: "with food" },
+  { key: "no_drinks",              label: "no drinks" },
+  { key: "earlier",                label: "earlier" },
+  { key: "later",                  label: "later" },
+  { key: "outdoorsy",              label: "outdoorsy" },
+  { key: "indoorsy",               label: "indoorsy" },
+];
 
 /**
  * AstralDrawer
@@ -58,6 +76,13 @@ export default function AstralDrawer({
   const [drafting, setDrafting] = useState(null); // card.id while drafting
   const [drafts, setDrafts] = useState({}); // { cardId: messageString }
 
+  // Remix mode — what's been shown (so Astral doesn't repeat venues), the
+  // selected chip presets, and the optional free-text remix hint.
+  const [shownCards, setShownCards] = useState([]);   // accumulated cards Astral has produced this session
+  const [remixPresets, setRemixPresets] = useState([]); // ["cheaper", "different_neighborhood", ...]
+  const [remixHint, setRemixHint] = useState("");
+  const [remixing, setRemixing] = useState(false);
+
   // Lock-in flow — Phase 4 commitment ladder.
   const [lockInCard, setLockInCard] = useState(null);
 
@@ -98,6 +123,9 @@ export default function AstralDrawer({
       setResult(null);
       setErrMsg(null);
       setDrafts({});
+      setShownCards([]);
+      setRemixPresets([]);
+      setRemixHint("");
       if (suggestedWindow) setWindowBlurb(suggestedWindow);
     }
     lastOpenRef.current = open;
@@ -130,6 +158,10 @@ export default function AstralDrawer({
         );
       }
       setResult(out);
+      // Reset accumulated history on a fresh ask — start a new "round".
+      setShownCards(out.cards || []);
+      setRemixPresets([]);
+      setRemixHint("");
     } catch (err) {
       console.error(err);
       setErrMsg(
@@ -139,6 +171,53 @@ export default function AstralDrawer({
       setLoading(false);
     }
   };
+
+  // Remix — re-ask Astral with the prior cards and a chip/free-form
+  // redirection. Astral switches into remix mode server-side and won't
+  // repeat any venue we've shown so far this session.
+  const onRemix = async (e) => {
+    e?.preventDefault?.();
+    if (!windowBlurb.trim()) {
+      toast.error("tell astral when you're free first");
+      return;
+    }
+    if (remixPresets.length === 0 && !remixHint.trim()) {
+      toast.error("pick a remix vibe (or type a hint)");
+      return;
+    }
+    setRemixing(true);
+    setErrMsg(null);
+    try {
+      const out = await astralSuggest(group.code, {
+        window_blurb: windowBlurb.trim(),
+        location_override:
+          (locationOverride || myLocation || "").trim() || null,
+        history_blurb: (historyBlurb || "").trim() || null,
+        previous_cards: shownCards,
+        remix_presets: remixPresets,
+        remix_hint: remixHint.trim() || null,
+      });
+      if (!out.cards || out.cards.length === 0) {
+        setErrMsg("astral couldn't remix that one. tweak the hint and try again.");
+      }
+      setResult(out);
+      // Append to shown so a follow-up remix won't repeat these either.
+      setShownCards((prev) => [...prev, ...(out.cards || [])]);
+      // Clear the hint so the chips are ready for a new round; keep presets
+      // selected so a quick "remix again" honors the same vibe by default.
+      setRemixHint("");
+    } catch (err) {
+      console.error(err);
+      setErrMsg("couldn't remix. try again in a sec.");
+    } finally {
+      setRemixing(false);
+    }
+  };
+
+  const togglePreset = (key) =>
+    setRemixPresets((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
 
   const onDraft = async (card) => {
     setDrafting(card.id);
@@ -410,6 +489,83 @@ export default function AstralDrawer({
                   onLockIn={() => setLockInCard(card)}
                 />
               ))}
+
+              {/* Remix block — chat-style follow-ups. Lets the group redirect
+                  Astral without re-typing the whole window. Pick chips, add
+                  optional free-text hint, hit Remix → Astral re-runs with
+                  "do not repeat any of these venues" + the new vibe. */}
+              {result.cards.length > 0 && (
+                <div
+                  className="rounded-2xl border-2 border-slate-900 bg-[var(--pastel-lavender)] p-4 space-y-3"
+                  data-testid="astral-remix"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Shuffle className="w-4 h-4" />
+                      <div className="font-heading font-black text-sm">
+                        Not feeling these? Remix.
+                      </div>
+                    </div>
+                    {shownCards.length > 3 && (
+                      <span className="text-[0.6rem] uppercase tracking-wider font-bold opacity-70">
+                        round {Math.ceil(shownCards.length / 3)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5" data-testid="remix-chips">
+                    {REMIX_CHIPS.map((c) => {
+                      const active = remixPresets.includes(c.key);
+                      return (
+                        <button
+                          key={c.key}
+                          type="button"
+                          onClick={() => togglePreset(c.key)}
+                          data-testid={`remix-chip-${c.key}`}
+                          className={`text-[0.65rem] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border-2 border-slate-900 transition ${
+                            active
+                              ? "bg-slate-900 text-white"
+                              : "bg-white hover:bg-[var(--pastel-mint)]"
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <input
+                    type="text"
+                    className="neo-input w-full text-sm"
+                    placeholder="or type a vibe — 'we want tacos' / 'somewhere quiet' / 'no bars'"
+                    value={remixHint}
+                    onChange={(e) => setRemixHint(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !remixing) onRemix(e);
+                    }}
+                    data-testid="remix-hint-input"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={onRemix}
+                    disabled={remixing || (remixPresets.length === 0 && !remixHint.trim())}
+                    className="neo-btn w-full flex items-center justify-center gap-2 text-sm"
+                    data-testid="remix-submit-btn"
+                  >
+                    {remixing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> remixing…
+                      </>
+                    ) : (
+                      <>
+                        <Shuffle className="w-4 h-4" /> remix it
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {result.cards.length > 0 && (
                 <p className="text-[0.7rem] text-center opacity-60 lowercase pt-2">
                   buzz reflects common reviewer sentiment. always verify on

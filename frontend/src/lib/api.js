@@ -91,6 +91,11 @@ export const deleteCalendar = (code, member_id, cal_id) =>
 export const memberFeedUrl = (code, member_id) =>
   `${API}/groups/${code}/members/${member_id}/feed.ics`;
 
+// One-shot single-event .ics download URL — used by the "Add to calendar"
+// button on a single Hangout row.
+export const hangoutEventIcsUrl = (code, hid) =>
+  `${API}/groups/${code}/hangouts/${hid}/event.ics`;
+
 // ---------- Life Templates ----------
 
 export const listTemplates = (code, member_id) =>

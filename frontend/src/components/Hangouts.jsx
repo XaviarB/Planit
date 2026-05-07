@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   createHangout, listHangouts, deleteHangout, rsvpHangout, updateHangout,
-  memberFeedUrl, astralDraftInvite,
+  memberFeedUrl, hangoutEventIcsUrl, astralDraftInvite,
 } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
 
@@ -102,11 +102,10 @@ export function LockInModal({
   };
 
   const downloadIcs = () => {
-    if (!created || !memberId) return;
-    // We hit the per-member feed for now (single hangout will dominate it
-    // since this is a fresh group). For a single-event .ics we could also
-    // build it client-side. The feed is fine for v1.
-    const url = memberFeedUrl(group.code, memberId);
+    if (!created) return;
+    // Real one-shot single-event .ics — distinct from the recurring feed
+    // (which is offered as the "subscribe forever" option below).
+    const url = hangoutEventIcsUrl(group.code, created.id);
     window.open(url, "_blank");
   };
 
@@ -272,7 +271,7 @@ export function LockInModal({
                 onClick={downloadIcs}
                 data-testid="lockin-ics-download-btn"
               >
-                <Download className="w-4 h-4" /> open .ics feed
+                <Download className="w-4 h-4" /> download .ics
               </button>
               {feedUrl && (
                 <details className="text-xs">
@@ -534,6 +533,16 @@ function HangoutRow({ h, group, memberId, onChanged }) {
         <RsvpBtn label="maybe" icon={HelpCircle} active={myRsvp === "maybe"} onClick={() => onRsvp("maybe")} testid={`hangout-rsvp-maybe-${h.id}`} />
         <RsvpBtn label="no" icon={Minus} active={myRsvp === "no"} onClick={() => onRsvp("no")} testid={`hangout-rsvp-no-${h.id}`} />
         <div className="flex-1" />
+        <a
+          href={hangoutEventIcsUrl(group.code, h.id)}
+          target="_blank"
+          rel="noreferrer"
+          className="w-7 h-7 grid place-items-center rounded-md border-2 border-slate-900 hover:bg-[var(--pastel-mint)]"
+          title="Download .ics — add this single hangout to your calendar"
+          data-testid={`hangout-ics-${h.id}`}
+        >
+          <Download className="w-3 h-3" />
+        </a>
         {h.status !== "locked" && (
           <button
             type="button"

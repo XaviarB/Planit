@@ -242,6 +242,38 @@ rules:
 """
 
 
+# Built-in remix presets — chip-friendly hints that get appended to remix
+# instructions verbatim. Free-form `remix_hint` from the UI is appended too.
+REMIX_PRESETS = {
+    "cheaper":               "make these noticeably cheaper. shift to $ or $$ tier. dive bars, food trucks, BYOB are fair game.",
+    "fancier":               "go a tier up. cocktail bars, tasting menus, rooftops, anything where you'd feel weird in shorts.",
+    "different_neighborhood":"do not reuse any neighborhood from the previous picks. surprise us.",
+    "different_vibe":        "completely different energy than the last cards — if last was loud, go chill. if last was a sit-down, go interactive.",
+    "more_chill":            "lower the energy. quieter rooms, conversation-friendly, soft lighting, no thumping bass.",
+    "more_lit":              "crank the energy. live music, packed houses, dance floors, places where you'd lose your voice by midnight.",
+    "with_food":             "every card needs to actually feed people. bar snacks don't count — real food.",
+    "no_drinks":             "pivot away from alcohol-led venues. cafes, dessert spots, late-night diners, comedy, activities.",
+    "earlier":               "tilt the picks toward early evening — golden hour spots, places that peak before 9pm.",
+    "later":                 "tilt the picks late — places that wake up after 10pm, after-hours moves.",
+    "outdoorsy":             "outdoor seating, rooftops, parks-with-vendors, anything al-fresco-friendly.",
+    "indoorsy":              "weather-proof picks. solid indoor settings.",
+}
+
+REMIX_INSTRUCTIONS = """you're remixing — the group already saw your last 3
+picks and asked for a different cut. produce 3 NEW cards that:
+
+- DO NOT repeat any venue name (or close variant) from the previous list.
+- honor the remix request below as a hard constraint.
+- keep the schema identical to your normal suggest output. JSON only.
+
+previous picks (do not repeat):
+{prev_blurb}
+
+remix request:
+{remix_blurb}
+"""
+
+
 async def suggest_hangouts(
     *,
     window_blurb: str,
@@ -250,24 +282,54 @@ async def suggest_hangouts(
     group_name: Optional[str],
     history_blurb: Optional[str] = None,
     member_summaries: Optional[str] = None,
+    previous_cards: Optional[List[Dict[str, Any]]] = None,
+    remix_presets: Optional[List[str]] = None,
+    remix_hint: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Returns {"intro": str, "cards": [card,...]}. Up to 3 cards.
 
     Falls back to a polite empty object if Gemini misbehaves (UI handles it).
+
+    When `previous_cards` and/or `remix_presets`/`remix_hint` are passed, Astral
+    enters "remix" mode — the prompt forbids repeating the prior venues and
+    folds in the user's redirection (chip presets like 'cheaper', 'different
+    vibe' + free-form hint like 'we want tacos this time').
     """
     area = (location or "").strip() or "the group's general area (no specific location set)"
     history = (history_blurb or "").strip()
     members_blurb = (member_summaries or "").strip()
+    prev = previous_cards or []
+    presets = [p for p in (remix_presets or []) if p in REMIX_PRESETS]
+    hint = (remix_hint or "").strip()
+    is_remix = bool(prev or presets or hint)
 
-    sys = (
-        ASTRAL_PERSONA
-        + "\n\n---\n\n"
-        + SUGGEST_INSTRUCTIONS.format(
-            area=area,
-            member_count=member_count,
-            window_blurb=window_blurb,
-        )
+    # Base instructions, then remix tail when applicable.
+    base = SUGGEST_INSTRUCTIONS.format(
+        area=area,
+        member_count=member_count,
+        window_blurb=window_blurb,
     )
+    if is_remix:
+        prev_lines = []
+        for c in prev[:9]:
+            v = (c.get("venue") or "").strip()
+            n = (c.get("neighborhood") or "").strip()
+            cat = (c.get("category") or "").strip()
+            if v:
+                prev_lines.append(f"- {v}" + (f" ({cat} · {n})" if cat or n else ""))
+        prev_blurb = "\n".join(prev_lines) if prev_lines else "(none)"
+        remix_lines: List[str] = []
+        for p in presets:
+            remix_lines.append(f"- preset [{p}]: {REMIX_PRESETS[p]}")
+        if hint:
+            remix_lines.append(f"- free-form note from user: {hint}")
+        remix_blurb = "\n".join(remix_lines) if remix_lines else "(no specific request — just give us a fresh angle)"
+        base = base + "\n\n" + REMIX_INSTRUCTIONS.format(
+            prev_blurb=prev_blurb,
+            remix_blurb=remix_blurb,
+        )
+
+    sys = ASTRAL_PERSONA + "\n\n---\n\n" + base
 
     user_parts = [
         f"group name: {group_name or 'untitled'}",
@@ -279,9 +341,12 @@ async def suggest_hangouts(
         user_parts.append(f"members context: {members_blurb}")
     if history:
         user_parts.append(f"group history blurb: {history}")
-    user_parts.append("now produce the JSON object exactly per the schema above.")
+    if is_remix:
+        user_parts.append("now produce the JSON remix — fresh venues only.")
+    else:
+        user_parts.append("now produce the JSON object exactly per the schema above.")
 
-    chat = _new_chat(sys, "suggest")
+    chat = _new_chat(sys, "remix" if is_remix else "suggest")
     try:
         resp = await chat.send_message(UserMessage(text="\n".join(user_parts)))
         data = _safe_json_loads(resp)

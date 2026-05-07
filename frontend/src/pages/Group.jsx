@@ -245,12 +245,12 @@ export default function GroupPage() {
           <div className="flex items-center gap-3" data-testid="view-tabs">
             <div
               className="inline-flex border-2 border-slate-900 rounded-full overflow-hidden"
-              style={{ boxShadow: "3px 3px 0 0 var(--ink)" }}
+              style={{ boxShadow: "2px 2px 0 0 var(--ink)" }}
             >
               <button
                 onClick={() => { setTab("dates"); setEditMode(false); }}
                 data-testid="tab-dates"
-                className={`px-5 py-2.5 text-sm font-bold font-heading transition ${
+                className={`px-3.5 py-1.5 text-xs font-bold font-heading transition ${
                   tab === "dates" && !editMode
                     ? "bg-slate-900 text-white"
                     : "bg-white hover:bg-[var(--pastel-mint)]"
@@ -261,7 +261,7 @@ export default function GroupPage() {
               <button
                 onClick={() => { setTab("members"); setEditMode(false); }}
                 data-testid="tab-members"
-                className={`px-5 py-2.5 text-sm font-bold font-heading transition border-l-2 border-slate-900 ${
+                className={`px-3.5 py-1.5 text-xs font-bold font-heading transition border-l-2 border-slate-900 ${
                   tab === "members"
                     ? "bg-slate-900 text-white"
                     : "bg-white hover:bg-[var(--pastel-mint)]"

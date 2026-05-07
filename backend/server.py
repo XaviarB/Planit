@@ -25,7 +25,7 @@ db = client[os.environ['DB_NAME']]
 # Astral concierge — imported AFTER load_dotenv so the LLM key is visible.
 from astral import parse_busy_text, suggest_hangouts, draft_invite  # noqa: E402
 from calendar_sync import (  # noqa: E402
-    fetch_ics, parse_ics_to_slots, build_member_feed, merge_slot_lists,
+    fetch_ics, parse_ics_to_slots, build_member_feed, build_single_event_ics, merge_slot_lists,
 )
 
 app = FastAPI()
@@ -202,6 +202,12 @@ class AstralSuggestReq(BaseModel):
     # Optional inside-joke history blurb the UI may pass ("we tried tuesday
     # last time and 2 of you flaked").
     history_blurb: Optional[str] = None
+    # Remix mode — pass the prior cards Astral already returned and a chip
+    # preset list and/or free-text hint to redirect the next round. When any
+    # of these are set, Astral switches into remix mode (won't repeat venues).
+    previous_cards: Optional[List[Dict]] = None
+    remix_presets: Optional[List[str]] = None  # e.g. ["cheaper", "different_neighborhood"]
+    remix_hint: Optional[str] = None           # e.g. "we want tacos, no bars"
 
 
 class AstralDraftInviteReq(BaseModel):
@@ -467,9 +473,13 @@ async def astral_suggest(code: str, req: AstralSuggestReq):
         group_name=g.get("name") or "the group",
         history_blurb=req.history_blurb,
         member_summaries=members_blurb,
+        previous_cards=req.previous_cards,
+        remix_presets=req.remix_presets,
+        remix_hint=req.remix_hint,
     )
     out["used_location"] = location
     out["participant_count"] = member_count
+    out["was_remix"] = bool(req.previous_cards or req.remix_presets or req.remix_hint)
     return out
 
 
@@ -861,6 +871,29 @@ async def delete_hangout(code: str, hid: str):
         {"$pull": {"hangouts": {"id": hid}}},
     )
     return {"ok": True}
+
+
+@api_router.get("/groups/{code}/hangouts/{hid}/event.ics")
+async def hangout_single_event_ics(code: str, hid: str):
+    """One-shot .ics download for a single Hangout — distinct from the
+    member feed (which is a recurring subscription URL)."""
+    from fastapi.responses import Response
+
+    g = await find_group(code)
+    h = next((x for x in (g.get("hangouts") or []) if x.get("id") == hid), None)
+    if not h:
+        raise HTTPException(status_code=404, detail="Hangout not found")
+    body = build_single_event_ics(
+        hangout=h,
+        group_code=code.upper(),
+        group_name=g.get("name") or "Group",
+    )
+    fname = (h.get("title") or "planit-hangout").strip().lower().replace(" ", "-")[:48] or "planit-hangout"
+    return Response(
+        content=body,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fname}.ics"'},
+    )
 
 
 # =============================================================================

@@ -163,6 +163,57 @@ def parse_ics_to_slots(
 # OUT: build a Planit member's personal .ics feed                             #
 # --------------------------------------------------------------------------- #
 
+def build_single_event_ics(
+    *,
+    hangout: Dict[str, Any],
+    group_code: str,
+    group_name: str,
+) -> bytes:
+    """Build a one-event .ics blob for a specific hangout — for a "Download
+    .ics" button on a single Hangout row. No RSVP filtering: caller decided
+    they want this event in their calendar."""
+    cal = Calendar()
+    cal.add("prodid", "-//Planit//Astral Concierge//EN")
+    cal.add("version", "2.0")
+    cal.add("calscale", "GREGORIAN")
+    cal.add("method", "PUBLISH")
+    cal.add("x-wr-calname", f"Planit · {group_name or 'Group'}")
+    cal.add("x-wr-timezone", "UTC")
+
+    start = _parse_iso(hangout.get("start_iso") or "")
+    end = _parse_iso(hangout.get("end_iso") or "")
+    if not start or not end:
+        # Still return a valid (empty) calendar rather than 500.
+        return cal.to_ical()
+
+    ev = Event()
+    ev.add("uid", f"{group_code}-{hangout.get('id', 'x')}@planit")
+    ev.add("dtstamp", datetime.now(timezone.utc))
+    ev.add("dtstart", start)
+    ev.add("dtend", end)
+    summary = (hangout.get("title") or "Planit hangout").strip()
+    status = (hangout.get("status") or "tentative").upper()
+    if status == "TENTATIVE":
+        summary = f"[tentative] {summary}"
+    ev.add("summary", summary)
+    ev.add("status", "TENTATIVE" if status == "TENTATIVE" else "CONFIRMED")
+    descr_lines: List[str] = []
+    if hangout.get("astral_take"):
+        descr_lines.append(hangout["astral_take"])
+    descr_lines.append(f"Planit group: {group_code}")
+    if hangout.get("invite_message"):
+        descr_lines.append("\n" + hangout["invite_message"])
+    if descr_lines:
+        ev.add("description", "\n".join(descr_lines))
+    if hangout.get("location_name") or hangout.get("address"):
+        ev.add(
+            "location",
+            ", ".join(filter(None, [hangout.get("location_name"), hangout.get("address")])),
+        )
+    cal.add_component(ev)
+    return cal.to_ical()
+
+
 def build_member_feed(
     *,
     feed_uid_prefix: str,

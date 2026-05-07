@@ -128,6 +128,10 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
   };
   const onTouchMove = (e) => {
     if (!drag) return;
+    // Prevent the native "drag selects text" / scroll-bounce on the editor
+    // grid while we're painting cells. Cells already have touch-action:none,
+    // but Safari occasionally fires touchmove on the wrapper before we hit a cell.
+    if (e.cancelable) e.preventDefault();
     const t = e.touches[0];
     const el = document.elementFromPoint(t.clientX, t.clientY);
     if (!el) return;

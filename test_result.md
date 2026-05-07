@@ -207,6 +207,73 @@ backend:
           4. PUT /api/groups/{code}/members/{id} with name only (no location) → Back-compat works, name updated
           5. PUT with location "" → Clears field (serializes as null)
           All CRUD operations work correctly. Old documents without location field load without issues.
+  - task: "Astral remix mode (suggest with previous_cards / remix_presets / remix_hint)"
+    implemented: true
+    working: true
+    file: "backend/astral.py, backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Extended POST /api/groups/{code}/astral/suggest to accept optional previous_cards (list of
+          prior card dicts), remix_presets (list of preset keys from REMIX_PRESETS — cheaper, fancier,
+          different_neighborhood, different_vibe, more_chill, more_lit, with_food, no_drinks, earlier,
+          later, outdoorsy, indoorsy), and remix_hint (free-form). When any are set Astral switches
+          to "remix" mode: forbids reusing prior venues, folds chip presets + free-form hint into the
+          prompt. Response now includes was_remix=true when any remix field was supplied. Plain
+          (non-remix) calls remain backward-compatible — same shape as before plus was_remix=false.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 remix mode scenarios passed:
+          1. Plain suggest (no remix fields) → was_remix=false, 3 cards returned, all required fields present
+          2. Remix with previous_cards + remix_presets ["cheaper", "different_neighborhood"] → was_remix=true,
+             3 new cards returned, ZERO venue names repeated from previous cards
+          3. Remix with remix_hint "we want tacos no bars" → was_remix=true, 2/3 cards food-related
+             (categories: restaurant/cafe/other)
+          4. Garbage remix_presets ["bogus_preset", "cheaper", "invalid_chip"] → was_remix=true, invalid
+             presets silently filtered, only valid "cheaper" applied (200 OK, no errors)
+          5. Empty remix fields (previous_cards=[], remix_presets=[], remix_hint="") → was_remix=false,
+             treated as plain (non-remix) call
+          Gemini 2.5 Pro calls completed in 10-25s range. All response shapes validated. Backward
+          compatibility confirmed: plain calls work exactly as before with was_remix=false added.
+  - task: "Single-event .ics download endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/calendar_sync.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          NEW endpoint GET /api/groups/{code}/hangouts/{hid}/event.ics returns a one-shot .ics blob
+          for a single hangout (distinct from the recurring per-member feed). Content-Type is
+          text/calendar; Content-Disposition forces a download with a slugified filename. Implemented
+          via new build_single_event_ics() helper in calendar_sync.py. Tentative hangouts get a
+          "[tentative] " title prefix and STATUS:TENTATIVE; locked use STATUS:CONFIRMED. 404 on missing
+          group or hangout. Used by the new "Add to calendar" icon in HangoutsList rows and by the
+          updated LockInModal "download .ics" button.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 6 .ics export scenarios passed:
+          1. GET /api/groups/{code}/hangouts/{hid}/event.ics → 200 OK
+          2. Headers validated: Content-Type "text/calendar; charset=utf-8", Content-Disposition
+             "attachment" with .ics filename
+          3. iCalendar structure validated: Contains BEGIN:VCALENDAR, END:VCALENDAR, exactly 1
+             BEGIN:VEVENT/END:VEVENT, all required fields (DTSTART, DTEND, SUMMARY, UID) present
+          4. Tentative hangout (status="tentative") → SUMMARY contains "[tentative] " prefix,
+             body contains STATUS:TENTATIVE
+          5. Locked hangout (status="locked") → SUMMARY has NO "[tentative]" prefix, body contains
+             STATUS:CONFIRMED
+          6. Error handling: 404 when group code doesn't exist, 404 when hangout id doesn't exist
+          Created test group, created hangout with start/end times, verified tentative state, locked
+          hangout via PUT, re-fetched .ics and verified confirmed state. All validations passed.
 
 frontend:
   - task: "Astral concierge drawer + Ask Astral trigger"
@@ -254,7 +321,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.2"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
@@ -266,45 +333,52 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      Phase 2 (Astral AI concierge) implemented. Three new POST endpoints under
-      /api/groups/{code}/astral/* call Gemini 2.5 Pro via emergentintegrations + EMERGENT_LLM_KEY which
-      is already set in /app/backend/.env. Smoke tests via curl all returned 200 OK with on-brand
-      output. Please verify:
-        1. /astral/suggest with various window_blurb + location combinations (incl. empty location).
-           Validate response shape: cards[] (<=3), each with venue, buzz.quote, buzz.tone, rating,
-           verify_links.{google_search, google_maps}, astral_take. Empty results -> {intro:"", cards:[]}
-           rather than 500.
-        2. /astral/parse-busy with several phrasings ("next monday 6-9pm", "every weekday morning for
-           2 weeks", "i'm out fri-sun"). Should return slots with mode=date, status=busy, hour 0-23.
-           Empty input -> count=0. Never raises 500.
-        3. /astral/draft-invite always returns non-empty `message` string, even with sparse suggestion.
-        4. Location persistence: POST /api/groups with `location`; GET back; PUT /api/groups/{code};
-           PUT /api/groups/{code}/members/{id} with location only; rename-only still works (back-compat).
-      Note: Gemini calls take 10-25s — generous timeouts please. Smoke-test group already created:
-      code FLLB7A.
+      Two NEW backend additions to verify in this round (do NOT re-test the broader Phase-2 surface,
+      that's already green):
+      
+      1) ASTRAL REMIX MODE — same endpoint POST /api/groups/{code}/astral/suggest now accepts three
+         optional fields:
+            - previous_cards: list[dict]   (the cards Astral returned earlier — must NOT be repeated)
+            - remix_presets: list[str]     (chip keys: "cheaper", "fancier", "different_neighborhood",
+                                           "different_vibe", "more_chill", "more_lit", "with_food",
+                                           "no_drinks", "earlier", "later", "outdoorsy", "indoorsy")
+            - remix_hint: str              (free-form vibe redirection like "we want tacos")
+         When ANY of those is set, response includes was_remix=true. Verify:
+            a. Plain suggest call (no remix fields) still works exactly as before.
+            b. Suggest with remix_presets=["cheaper", "different_neighborhood"] + previous_cards
+               from a prior call → returns cards, was_remix=true, and venues differ from previous_cards.
+            c. Suggest with only remix_hint="we want tacos no bars" → cards lean toward food/tacos.
+            d. Empty/garbage in remix_presets is silently ignored (only known keys honored).
+         Gemini calls still take 10-25s — keep timeouts generous.
+      
+      2) SINGLE-EVENT .ICS EXPORT — new GET /api/groups/{code}/hangouts/{hid}/event.ics
+         Verify:
+            a. Returns 200, Content-Type "text/calendar", Content-Disposition: attachment.
+            b. Body is a valid iCalendar (BEGIN:VCALENDAR ... END:VCALENDAR) with exactly one VEVENT.
+            c. SUMMARY contains the hangout title; if hangout.status="tentative", title is prefixed
+               with "[tentative] " and STATUS:TENTATIVE; if "locked", STATUS:CONFIRMED.
+            d. 404 when group OR hangout id is missing.
+         To set up: create a group, create a hangout via existing POST /api/groups/{code}/hangouts.
+      
+      Smoke-test group: code N7UVGL ("Weekend Warriors", Brooklyn, NY) — already exists.
+      All other prior endpoints unchanged. Please don't re-run the full Phase-2 suite, just these two.
   - agent: "testing"
     message: |
-      ✅ BACKEND TESTING COMPLETE - ALL CRITICAL FEATURES WORKING
+      ✅ TESTING COMPLETE - Both new backend features fully verified and working:
       
-      Comprehensive test suite executed via /app/backend_test.py against production backend URL.
-      Test results: 14 PASSED, 0 CRITICAL FAILURES.
+      1) ASTRAL REMIX MODE (5/5 scenarios passed):
+         - Plain suggest (no remix) → was_remix=false ✅
+         - Remix with presets + previous_cards → was_remix=true, no repeated venues ✅
+         - Remix with hint only → was_remix=true, food-focused results ✅
+         - Garbage presets filtered → was_remix=true, only valid applied ✅
+         - Empty remix fields → was_remix=false (non-remix) ✅
       
-      VERIFIED WORKING:
-      1. ✅ Astral suggest endpoint - All scenarios pass (with location, without location, 404 for non-existent)
-      2. ✅ Astral parse-busy endpoint - All scenarios pass (valid input, empty input, garbage input)
-      3. ✅ Astral draft-invite endpoint - Both scenarios pass (normal suggestion, sparse/defensive fallback)
-      4. ✅ Location persistence - All CRUD operations pass (create, update group, update member, clear, back-compat)
-      5. ✅ Existing endpoints sanity check - All legacy CRUD operations still working
+      2) SINGLE-EVENT .ICS EXPORT (6/6 scenarios passed):
+         - GET returns 200 with correct headers (text/calendar, attachment) ✅
+         - Valid iCalendar structure (1 VEVENT, all required fields) ✅
+         - Tentative status → [tentative] prefix + STATUS:TENTATIVE ✅
+         - Locked status → no prefix + STATUS:CONFIRMED ✅
+         - 404 for non-existent group ✅
+         - 404 for non-existent hangout ✅
       
-      GEMINI INTEGRATION:
-      - All Gemini 2.5 Pro API calls completing successfully in 10-25s range
-      - EMERGENT_LLM_KEY working correctly
-      - Response shapes validated against specification
-      - Error handling working (defensive fallbacks, never 500 on bad input)
-      
-      SMOKE TEST GROUP:
-      - Code FLLB7A verified existing with location "Brooklyn, NY"
-      - All Astral endpoints tested against this group successfully
-      
-      Backend is production-ready. All high-priority and medium-priority tasks verified working.
-      Existing functionality preserved (backward compatibility confirmed).
+      All tests executed against production URL. No issues found. Both features ready for use.

@@ -1,0 +1,453 @@
+import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { buildTimeSlots, timeLabel } from "../lib/schedule";
+import { updateSlots, addReason, deleteReason } from "../lib/api";
+import { toast } from "sonner";
+import { Settings, Plus, X, ChevronDown } from "lucide-react";
+
+// Editor for a single member. Click/touch a cell to toggle busy/free.
+// `minuteStep` is owned LOCALLY by this component (precision only affects
+// editing — group-wide grids stay at hour granularity).
+const AvailabilityEditor = forwardRef(function AvailabilityEditor({
+  code,
+  me,
+  reasons,
+  columns,
+  mode,
+  hourFrom = 0,
+  hourTo = 23,
+  minuteStep,
+  onMinuteStepChange,
+  onReasonsChange,
+  onSaved,
+}, ref) {
+  // Internal precision if parent didn't supply one (defaults to 60).
+  const [internalStep, setInternalStep] = useState(minuteStep || 60);
+  const step = minuteStep || internalStep;
+  const setStep = (s) => {
+    setInternalStep(s);
+    onMinuteStepChange && onMinuteStepChange(s);
+  };
+
+  // Local edit map keyed by `${mode}|${colKey}|${hour}|${minute}` → busy slot.
+  // Slots NOT in the visible mode/columns are preserved as-is at save time.
+  const buildEditMap = (slots, st) => {
+    const m = new Map();
+    for (const s of slots || []) {
+      if (s.status !== "busy") continue;
+      const sStep = s.step || 60;
+      const startMin = s.hour * 60 + (s.minute || 0);
+      const endMin = startMin + sStep;
+      // Explode into `st`-sized child cells aligned to current grid.
+      for (let mm = startMin; mm < endMin; mm += st) {
+        const hour = Math.floor(mm / 60);
+        const minute = mm % 60;
+        if (hour > 23) break;
+        const k = `${s.mode}|${s.key}|${hour}|${minute}`;
+        const existing = m.get(k);
+        if (!existing || (!existing.reason_id && s.reason_id)) {
+          m.set(k, {
+            mode: s.mode,
+            key: s.key,
+            hour,
+            minute,
+            step: st,
+            status: "busy",
+            reason_id: s.reason_id || null,
+          });
+        }
+      }
+    }
+    return m;
+  };
+
+  const [slotMap, setSlotMap] = useState(() => buildEditMap(me.slots, step));
+  const [activeReason, setActiveReason] = useState(reasons[0]?.id || null);
+  const [drag, setDrag] = useState(null); // {targetStatus}
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newColor, setNewColor] = useState("#7FB3D5");
+  const [reasonBusy, setReasonBusy] = useState(false);
+
+  const timeSlots = useMemo(
+    () => buildTimeSlots(hourFrom, hourTo, step),
+    [hourFrom, hourTo, step]
+  );
+
+  // Re-derive when underlying slots change OR when precision changes.
+  useEffect(() => {
+    setSlotMap(buildEditMap(me.slots, step));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me.id, me.slots, step]);
+
+  const reasonMap = useMemo(() => Object.fromEntries(reasons.map((r) => [r.id, r])), [reasons]);
+
+  const keyFor = (colKey, hour, minute) => `${mode}|${colKey}|${hour}|${minute}`;
+
+  const setSlot = (colKey, hour, minute, nextStatus, reason_id) => {
+    const k = keyFor(colKey, hour, minute);
+    setSlotMap((prev) => {
+      const m = new Map(prev);
+      if (nextStatus === "free") {
+        m.delete(k);
+      } else {
+        m.set(k, {
+          mode,
+          key: colKey,
+          hour,
+          minute,
+          step,
+          status: "busy",
+          reason_id: reason_id || null,
+        });
+      }
+      return m;
+    });
+  };
+
+  const currentStatus = (colKey, hour, minute) =>
+    slotMap.has(keyFor(colKey, hour, minute)) ? "busy" : "free";
+  const currentReason = (colKey, hour, minute) =>
+    slotMap.get(keyFor(colKey, hour, minute))?.reason_id;
+
+  const onCellDown = (colKey, hour, minute) => {
+    const cur = currentStatus(colKey, hour, minute);
+    const next = cur === "free" ? "busy" : "free";
+    setDrag({ target: next });
+    setSlot(colKey, hour, minute, next, activeReason);
+  };
+  const onCellEnter = (colKey, hour, minute) => {
+    if (!drag) return;
+    setSlot(colKey, hour, minute, drag.target, activeReason);
+  };
+  const onUp = () => setDrag(null);
+
+  // Touch / mobile gesture support — convert touchmove into cell paint events.
+  const onTouchStart = (colKey, hour, minute) => (e) => {
+    e.preventDefault();
+    onCellDown(colKey, hour, minute);
+  };
+  const onTouchMove = (e) => {
+    if (!drag) return;
+    const t = e.touches[0];
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    if (!el) return;
+    const tid = el.getAttribute && el.getAttribute("data-cell-coord");
+    if (!tid) return;
+    const [colKey, h, m] = tid.split("|");
+    setSlot(colKey, Number(h), Number(m), drag.target, activeReason);
+  };
+  const onTouchEnd = () => setDrag(null);
+
+  useEffect(() => {
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Imperative save — exposed to parent so the Done editing button can save+exit.
+  const performSave = async () => {
+    try {
+      const visibleColumnKeys = new Set(columns.map((c) => c.key));
+      const preserved = (me.slots || []).filter(
+        (s) =>
+          s.status === "busy" &&
+          !(s.mode === mode && visibleColumnKeys.has(s.key))
+      );
+      const edits = Array.from(slotMap.values());
+      const slots = [...preserved, ...edits];
+      await updateSlots(code, me.id, slots);
+      toast.success("Availability saved!");
+      onSaved && onSaved(slots);
+      return { ok: true };
+    } catch (e) {
+      toast.error("Failed to save.");
+      return { ok: false, error: e };
+    }
+  };
+  useImperativeHandle(ref, () => ({ save: performSave }), [slotMap, columns, me]);
+
+  const onClear = () => setSlotMap(new Map());
+
+  // ---- Reason customization handlers ----
+  const onAddReason = async (e) => {
+    e?.preventDefault?.();
+    const label = newLabel.trim();
+    if (!label) return toast.error("Give your label a name");
+    setReasonBusy(true);
+    try {
+      const created = await addReason(code, label, newColor);
+      onReasonsChange && onReasonsChange([...reasons, created]);
+      setActiveReason(created.id);
+      setNewLabel("");
+      toast.success(`Added "${label}"`);
+    } catch {
+      toast.error("Could not add label");
+    } finally {
+      setReasonBusy(false);
+    }
+  };
+
+  const onDeleteReason = async (id) => {
+    setReasonBusy(true);
+    try {
+      await deleteReason(code, id);
+      const next = reasons.filter((r) => r.id !== id);
+      onReasonsChange && onReasonsChange(next);
+      if (activeReason === id) setActiveReason(next[0]?.id || null);
+      toast.success("Label removed");
+    } catch {
+      toast.error("Could not remove label");
+    } finally {
+      setReasonBusy(false);
+    }
+  };
+
+  const cellHeight = step === 60 ? 34 : step === 30 ? 24 : 18;
+
+  return (
+    <div className="neo-card p-4 sm:p-6" data-testid="availability-editor">
+      {/* Top row: precision + Clear view + Customize labels */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="label-caps">Precision</div>
+        <div
+          className="inline-flex rounded-full border-2 border-slate-900 overflow-hidden"
+          data-testid="editor-minute-step-toggle"
+        >
+          {[60, 30, 15].map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStep(s)}
+              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition ${
+                step === s
+                  ? "bg-slate-900 text-white"
+                  : "bg-white hover:bg-[var(--pastel-mint)]"
+              }`}
+              data-testid={`editor-minute-step-${s}`}
+            >
+              {s === 60 ? "1 hr" : `${s} min`}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1" />
+
+        <button
+          className="neo-btn ghost text-sm"
+          onClick={onClear}
+          data-testid="editor-clear-btn"
+        >
+          Clear view
+        </button>
+        <button
+          type="button"
+          onClick={() => setCustomizeOpen((v) => !v)}
+          className="neo-btn ghost text-sm flex items-center gap-1.5"
+          data-testid="customize-labels-btn"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Customize labels
+          <ChevronDown
+            className={`w-3.5 h-3.5 transition-transform ${
+              customizeOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Reason selector */}
+      <div className="mb-4">
+        <div className="label-caps mb-2">Why are you busy?</div>
+        <div className="flex flex-wrap gap-2" data-testid="reason-picker">
+          <ReasonChip
+            selected={activeReason === null}
+            onClick={() => setActiveReason(null)}
+            color="#ffffff"
+            label="No reason"
+            border
+            testId="reason-chip-none"
+          />
+          {reasons.map((r) => (
+            <ReasonChip
+              key={r.id}
+              selected={activeReason === r.id}
+              onClick={() => setActiveReason(r.id)}
+              color={r.color}
+              label={r.label}
+              testId={`reason-chip-${r.id}`}
+            />
+          ))}
+        </div>
+        <div className="mt-2 text-xs text-slate-600">
+          Tap & drag cells to mark busy with this reason. Tap again to mark free. Hit <b>Done editing</b> when finished — it saves automatically.
+        </div>
+
+        {customizeOpen && (
+          <div
+            className="mt-3 p-3 rounded-xl border-2 border-slate-900 bg-[var(--pastel-mint)]"
+            data-testid="customize-panel"
+          >
+            <div className="label-caps mb-2">Your labels</div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {reasons.length === 0 && (
+                <span className="text-xs text-slate-600">
+                  No labels yet — add your first below.
+                </span>
+              )}
+              {reasons.map((r) => (
+                <span
+                  key={r.id}
+                  className="px-2 py-1 text-xs font-bold rounded-full border-2 border-slate-900 text-white flex items-center gap-1.5"
+                  style={{ background: r.color }}
+                >
+                  {r.label}
+                  <button
+                    type="button"
+                    onClick={() => onDeleteReason(r.id)}
+                    disabled={reasonBusy}
+                    className="hover:text-red-200"
+                    aria-label={`Remove ${r.label}`}
+                    data-testid={`delete-reason-${r.id}`}
+                  >
+                    <X className="w-3 h-3" strokeWidth={3} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <form onSubmit={onAddReason} className="flex flex-wrap items-center gap-2" data-testid="add-reason-form">
+              <input
+                type="text"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="New label (e.g. Travel)"
+                maxLength={20}
+                className="neo-input flex-1 min-w-[140px] text-sm"
+                data-testid="new-reason-label"
+              />
+              <input
+                type="color"
+                value={newColor}
+                onChange={(e) => setNewColor(e.target.value)}
+                className="w-10 h-10 rounded-lg border-2 border-slate-900 cursor-pointer p-0 bg-white"
+                data-testid="new-reason-color"
+                title="Pick a color"
+              />
+              <button
+                type="submit"
+                disabled={reasonBusy || !newLabel.trim()}
+                className="neo-btn pastel text-sm flex items-center gap-1"
+                data-testid="add-reason-btn"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {/* Editable grid */}
+      <div
+        className="scroll-x"
+        onMouseLeave={() => setDrag(null)}
+        onTouchMove={onTouchMove}
+      >
+        <div
+          className="grid gap-1 min-w-fit select-none"
+          style={{
+            gridTemplateColumns: `64px repeat(${columns.length}, minmax(48px, 1fr))`,
+          }}
+        >
+          <div />
+          {columns.map((c) => (
+            <div key={c.key} className="label-caps text-center py-1">
+              {c.label}
+            </div>
+          ))}
+
+          {timeSlots.map(({ hour, minute }) => (
+            <Fragment key={`edit-${hour}-${minute}`}>
+              <div
+                className={`text-[11px] font-semibold flex items-center justify-end pr-2 ${
+                  minute === 0 ? "text-slate-700" : "text-slate-400"
+                }`}
+              >
+                {minute === 0 ? timeLabel(hour, 0) : `:${String(minute).padStart(2, "0")}`}
+              </div>
+              {columns.map((c) => {
+                const status = currentStatus(c.key, hour, minute);
+                const reason = currentReason(c.key, hour, minute);
+                const r = reason ? reasonMap[reason] : null;
+                const bg = status === "busy"
+                  ? (r ? r.color : "#E74C3C")
+                  : "var(--card-soft, var(--card))";
+                const borderStyle = status === "busy" ? "transparent" : "var(--ink)";
+                const textColor = status === "busy" ? "#fff" : "transparent";
+                return (
+                  <div
+                    key={`${c.key}-${hour}-${minute}`}
+                    className="heat-cell rounded-md flex items-center justify-center border-2"
+                    style={{
+                      background: bg,
+                      minHeight: cellHeight,
+                      borderColor: borderStyle,
+                      opacity: status === "busy" ? 1 : 0.55,
+                      touchAction: "none",
+                    }}
+                    onMouseDown={() => onCellDown(c.key, hour, minute)}
+                    onMouseEnter={() => onCellEnter(c.key, hour, minute)}
+                    onTouchStart={onTouchStart(c.key, hour, minute)}
+                    data-cell-coord={`${c.key}|${hour}|${minute}`}
+                    data-testid={`edit-cell-${c.key}-${hour}-${minute}`}
+                    title={status === "busy" ? `Busy${r ? " · " + r.label : ""}` : "Free"}
+                  >
+                    {r && status === "busy" && step >= 30 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: textColor }}>
+                        {r.label.slice(0, 4)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 text-xs text-slate-600 flex items-center gap-3 flex-wrap">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-4 h-4 rounded border-2 border-slate-900 opacity-55" style={{ background: "var(--card-soft, var(--card))" }} /> Free
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-4 h-4 rounded border-2 border-slate-900" style={{ background: "#E74C3C" }} /> Busy (no reason)
+        </span>
+      </div>
+    </div>
+  );
+});
+
+function ReasonChip({ selected, onClick, color, label, border, testId }) {
+  return (
+    <button
+      onClick={onClick}
+      data-testid={testId}
+      className={`px-3 py-1.5 rounded-full text-sm font-bold border-2 transition ${
+        selected ? "border-slate-900 ring-2 ring-slate-900/20 scale-105" : "border-slate-900/40 hover:border-slate-900"
+      }`}
+      style={{
+        background: color,
+        color: border ? "#0f172a" : "#fff",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+export default AvailabilityEditor;

@@ -1,0 +1,126 @@
+{
+  "theme_and_archetype": {
+    "domain": "Social Apps, Productivity, Gen Z",
+    "theme": "LIGHT",
+    "archetype": "Archetype 3 (Pastel & Soft)",
+    "e1_twist": "Neo-Brutalism. Bold charcoal borders (1px to 2px solid), stark white cards on pastel backgrounds, and zero muddy drop-shadows. This grounds the softness of the pastels and prevents the app from feeling childish. It balances approachability with structural boldness."
+  },
+  "typography": {
+    "fonts": {
+      "headings": {
+        "family": "Outfit",
+        "weight": "font-black to font-medium",
+        "description": "Geometric but soft sans-serif for massive display headings.",
+        "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap"
+      },
+      "body": {
+        "family": "Work Sans",
+        "weight": "font-normal to font-medium",
+        "description": "Highly readable, warm humanist sans for grid text and labels.",
+        "url": "https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap"
+      }
+    },
+    "scale_hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-none font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight leading-none font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-bold",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-base leading-relaxed text-slate-800",
+      "labels": "text-xs tracking-[0.1em] uppercase font-bold text-slate-900"
+    }
+  },
+  "colors": {
+    "backgrounds": {
+      "app_base": "#FAFAFA",
+      "card_surface": "#FFFFFF",
+      "pastel_mint": "#D1F2EB",
+      "pastel_yellow": "#FEF9E7",
+      "pastel_lavender": "#F4ECF7"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#334155",
+      "inverse": "#FFFFFF"
+    },
+    "borders": {
+      "neo_brutalist": "#0F172A",
+      "subtle": "#E2E8F0"
+    },
+    "interactive": {
+      "primary_cta_bg": "#0F172A",
+      "primary_cta_text": "#FFFFFF",
+      "primary_cta_hover": "#334155"
+    },
+    "heatmap_availability": {
+      "0_free": "#F8FAFC",
+      "1_to_2_free": "#D1F2EB",
+      "3_to_4_free": "#A3E4D7",
+      "5_plus_free": "#1ABC9C",
+      "highlight_everyone_free": "#F1C40F"
+    },
+    "busy_reasons_default": {
+      "work": "#3498DB",
+      "class": "#9B59B6",
+      "gym": "#E74C3C",
+      "sleep": "#34495E"
+    }
+  },
+  "layout_and_spacing": {
+    "bento_grid": {
+      "description": "MODE B: THE CONTROL ROOM GRID for the dashboard, mixed with MODE A: THE TETRIS GRID for the landing page.",
+      "gap": "gap-6 md:gap-8",
+      "containers": "Use Generous Spacing Philosophy. p-6 or p-8 inside cards with borders to prevent text collision."
+    },
+    "surfaces": {
+      "neo_brutalist_cards": "bg-white border-2 border-slate-900 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] transition-transform hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(15,23,42,1)]"
+    }
+  },
+  "components": {
+    "heatmap_grid": {
+      "description": "The core group schedule viewer. A grid where X = Days, Y = Hours (or vice versa).",
+      "styling": "border-collapse. Every cell has a 1px solid border-slate-900. Color intensity dictates how many people are free.",
+      "interaction": "Hovering over a cell reveals a tooltip (Shadcn tooltip) detailing EXACTLY who is free and who is busy (and why).",
+      "labels": "Day names and Hour labels must be visible outside the grid (text-xs uppercase)."
+    },
+    "availability_editor": {
+      "description": "Individual view to toggle 1-hour slots. Supports clicking and dragging to select multiple slots.",
+      "styling": "Clean toggles. Selected 'Free' blocks turn Mint. Selected 'Busy' blocks turn Red (or custom tagged color)."
+    },
+    "color_wheel_picker": {
+      "description": "A customized gradient/color picker component for users to define custom 'Busy Reasons'.",
+      "implementation": "Use HTML5 <input type='color'> styled heavily with Tailwind, or a custom HSL slider. Output a hex code applied to the busy reason tag."
+    },
+    "marquee": {
+      "description": "Editorial Ribbon Marquee on the landing page showing names/avatars scrolling slowly.",
+      "implementation": "react-fast-marquee with large gaps (gap-32) and pastel pill backgrounds."
+    }
+  },
+  "media": {
+    "images": [
+      {
+        "category": "hero_background",
+        "description": "Abstract 3D illustration of soft floating geometric shapes representing time and calendars. To be used as a visual element on the landing page.",
+        "url": "https://static.prod-images.emergentagent.com/jobs/c7f83c87-60f0-4df3-8110-47252384897f/images/62e55dcffcee694d77309079f93509350117f4ae6c1e11b6ee3418996b7baffd.png"
+      },
+      {
+        "category": "testimonial_or_community",
+        "description": "Group of friends laughing, establishing a social, friendly vibe on the landing page.",
+        "url": "https://images.unsplash.com/photo-1761435751306-7717450f8c28?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwxfHxncm91cCUyMG9mJTIwZnJpZW5kcyUyMGxhdWdoaW5nJTIwY2FzdWFsfGVufDB8fHx8MTc3Nzk2ODMwMHww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "testimonial_alt",
+        "description": "Alternative friends image for bento grid layouts.",
+        "url": "https://images.unsplash.com/photo-1758613171187-9a41d0fc93ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwyfHxncm91cCUyMG9mJTIwZnJpZW5kcyUyMGxhdWdoaW5nJTIwY2FzdWFsfGVufDB8fHx8MTc3Nzk2ODMwMHww&ixlib=rb-4.1.0&q=85"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "DO NOT use Inter or Roboto. Inject the provided Google Fonts (Outfit and Work Sans) into the main HTML/CSS.",
+    "Implement the Neo-brutalist aesthetic: sharp 2px solid borders (slate-900) on cards, solid hard drop shadows, and soft pastel backgrounds. DO NOT USE blurry drop shadows.",
+    "For the heatmap: build a dynamic grid component. Ensure text labels (Days, Hours) are clear. Overlay cells with the appropriate heatmap intensity background. Add hover tooltips using Shadcn.",
+    "Ensure every interactive element has a data-testid (e.g., data-testid='create-group-btn', data-testid='heatmap-cell-monday-9am').",
+    "In the individual availability editor, allow users to set a custom color for a busy reason using an HSL/color picker input.",
+    "The Hero Section on the landing page should use the bento-grid layout, incorporating the hero_background image.",
+    "Mobile Responsiveness is critical. On mobile, the heatmap might need to be scrollable horizontally with a sticky leftmost column for hour labels."
+  ]
+}

@@ -2,74 +2,391 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-    margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Work+Sans:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap");
+
+:root {
+    --bg-base: #fafaf7;
+    --card: #ffffff;
+    --card-soft: #ffffff;
+    --ink: #0f172a;
+    --ink-soft: #334155;
+    --ink-mute: #64748b;
+    --btn-fg: #ffffff;
+    --pastel-mint: #d1f2eb;
+    --pastel-yellow: #fef9e7;
+    --pastel-lavender: #f4ecf7;
+    --pastel-peach: #fde2d3;
+    --heat-0: #1E2A78;
+    --heat-1: #3D4DC7;
+    --heat-2: #6E5FF0;
+    --heat-3: #A9A0FF;
+    --heat-all: #EDE7FF;
 }
 
-code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+html.dark {
+    --bg-base: #0f1620;
+    --card: #1a2332;
+    --card-soft: #232f42;
+    --ink: #f1f5f9;
+    --ink-soft: #cbd5e1;
+    --ink-mute: #94a3b8;
+    --btn-fg: #0f1620;
+    --pastel-mint: #1e3a32;
+    --pastel-yellow: #3d3520;
+    --pastel-lavender: #2e1f3d;
+    --pastel-peach: #3a2620;
+    --heat-0: #07091e;
+    --heat-1: #1a1240;
+    --heat-2: #3d2c8a;
+    --heat-3: #6b5fc4;
+    --heat-all: #b9b3f0;
+}
+
+html,
+body {
+    margin: 0;
+    background-color: var(--bg-base);
+    color: var(--ink);
+    font-family: "Work Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+.font-heading {
+    font-family: "Outfit", system-ui, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+/* Orbital / space-themed display font for hero highlight */
+.font-orbit {
+    font-family: "Orbitron", "Outfit", system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+/* Planet logo — globe static, ring of dots orbits, stars sparkle randomly */
+@keyframes ring-spin {
+    from {
+        transform: rotateZ(0deg);
+    }
+    to {
+        transform: rotateZ(360deg);
+    }
+}
+@keyframes star-twinkle {
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+    25% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(0.8);
+    }
+    75% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+.planet-logo-wrap {
+    cursor: default;
+    perspective: 240px;
+    perspective-origin: 50% 50%;
+}
+.planet-logo-wrap svg {
+    transform-style: preserve-3d;
+    overflow: visible;
+}
+/* Ring dots orbit around the globe (tilted plane + continuous Z-axis rotation) */
+.ring-orbit {
+    transform-origin: 16px 16px;
+    transform-box: view-box;
+    transform-style: preserve-3d;
+    transform: rotateZ(-18deg) rotateX(72deg);
+    backface-visibility: visible;
+}
+.ring-spin {
+    transform-origin: 16px 16px;
+    transform-box: view-box;
+    transform-style: preserve-3d;
+    animation: ring-spin 6s linear infinite;
+}
+.ring-spin circle {
+    fill: #0f172a;
+}
+/* Stars sparkle continuously — inline styles set per-star delay/duration for non-symmetric feel */
+.planet-stars circle {
+    transform-origin: center;
+    transform-box: fill-box;
+    opacity: 0;
+    fill: #f1c40f;
+    animation: star-twinkle 2s ease-in-out infinite;
+}
+
+/* Rocket launch animation (used in "Built for crews" card) */
+@keyframes rocket-lift {
+    0% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+    100% {
+        transform: translateY(-14px);
+    }
+}
+@keyframes flame-flicker {
+    0%,
+    100% {
+        transform: translateX(-50%) scaleY(1) scaleX(1);
+        opacity: 0.95;
+    }
+    50% {
+        transform: translateX(-50%) scaleY(1.4) scaleX(0.85);
+        opacity: 1;
+    }
+}
+.rocket-wrap {
+    position: relative;
+    overflow: hidden;
+}
+.rocket-icon {
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.rocket-flame {
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    transform: translateX(-50%) scaleY(0);
+    transform-origin: top center;
+    width: 14px;
+    height: 18px;
+    background: linear-gradient(
+        to bottom,
+        #fde2d3 0%,
+        #f1c40f 35%,
+        #f1948a 75%,
+        transparent 100%
+    );
+    border-radius: 50% 50% 30% 30% / 30% 30% 70% 70%;
+    opacity: 0;
+    pointer-events: none;
+    filter: blur(0.5px);
+    transition:
+        opacity 0.2s ease,
+        transform 0.25s ease;
+}
+.rocket-flame.small {
+    width: 8px;
+    height: 12px;
+    bottom: 6px;
+    background: linear-gradient(
+        to bottom,
+        #ffffff 0%,
+        #fef9e7 40%,
+        #f1c40f 100%
+    );
+}
+.rocket-wrap:hover .rocket-icon {
+    animation: rocket-lift 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.rocket-wrap:hover .rocket-flame {
+    opacity: 1;
+    transform: translateX(-50%) scaleY(1);
+    animation: flame-flicker 0.25s ease-in-out infinite;
+}
+
+.neo-card {
+    background: var(--card);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 14px;
+    box-shadow: 4px 4px 0px 0px var(--ink);
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        background-color 0.25s ease;
+}
+.neo-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px 0px var(--ink);
+}
+
+.neo-btn {
+    background: var(--ink);
+    color: var(--btn-fg);
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    padding: 0.75rem 1.5rem;
+    font-family: "Outfit", sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: 3px 3px 0px 0px var(--ink);
+    transition: all 0.12s ease;
+    cursor: pointer;
+}
+.neo-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0px 0px var(--ink);
+}
+.neo-btn:active {
+    transform: translate(0, 0);
+    box-shadow: 1px 1px 0px 0px var(--ink);
+}
+.neo-btn.ghost {
+    background: var(--card);
+    color: var(--ink);
+}
+.neo-btn.pastel {
+    background: var(--pastel-mint);
+    color: var(--ink);
+}
+
+.neo-input {
+    background: var(--card);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    padding: 0.6rem 0.9rem;
+    font-family: "Work Sans", sans-serif;
+    outline: none;
+    font-size: 0.95rem;
+}
+.neo-input:focus {
+    box-shadow: 3px 3px 0px 0px var(--ink);
+}
+.neo-input::placeholder {
+    color: var(--ink-mute);
+}
+html.dark .neo-input::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.7;
+}
+
+.label-caps {
+    font-family: "Outfit", sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 800;
+    color: var(--ink);
+}
+
+/* Heatmap cells */
+.heat-cell {
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    transition: transform 0.1s ease;
+    min-height: 30px;
+    position: relative;
+    cursor: pointer;
+}
+.heat-cell:hover {
+    transform: scale(1.08);
+    border: 1px solid var(--ink);
+    z-index: 2;
+}
+
+/* Subtle grain */
+.grain {
+    position: relative;
+}
+.grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+        rgba(15, 23, 42, 0.04) 1px,
+        transparent 1px
+    );
+    background-size: 4px 4px;
+    opacity: 0.6;
+    mix-blend-mode: multiply;
+}
+html.dark .grain::before {
+    background-image: radial-gradient(
+        rgba(255, 255, 255, 0.04) 1px,
+        transparent 1px
+    );
+    mix-blend-mode: screen;
+}
+
+/* Dark-mode utility-class overrides so hardcoded slate/white classes invert. */
+html.dark .bg-white {
+    background-color: var(--card) !important;
+}
+html.dark .border-slate-900 {
+    border-color: var(--ink) !important;
+}
+html.dark .text-slate-900 {
+    color: var(--ink) !important;
+}
+html.dark .text-slate-800,
+html.dark .text-slate-700 {
+    color: var(--ink-soft) !important;
+}
+html.dark .text-slate-600,
+html.dark .text-slate-500 {
+    color: var(--ink-mute) !important;
+}
+html.dark .bg-slate-900 {
+    background-color: var(--ink) !important;
+    color: var(--btn-fg) !important;
+}
+html.dark .bg-slate-900\/50 {
+    background-color: rgba(0, 0, 0, 0.65) !important;
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.pop-in {
+    animation: pop-in 0.4s ease both;
+}
+
+/* hide scrollbar nicely */
+.scroll-x {
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
 @layer base {
     :root {
         --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
+        --foreground: 222 47% 11%;
         --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
+        --card-foreground: 222 47% 11%;
         --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
+        --popover-foreground: 222 47% 11%;
+        --primary: 222 47% 11%;
         --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
+        --secondary: 210 40% 96.1%;
+        --secondary-foreground: 222 47% 11%;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215 16% 47%;
+        --accent: 168 76% 73%;
+        --accent-foreground: 222 47% 11%;
         --destructive: 0 84.2% 60.2%;
         --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --ring: 222 47% 11%;
+        --radius: 0.75rem;
     }
 }
 
@@ -78,38 +395,6 @@ code {
         @apply border-border;
     }
     body {
-        @apply bg-background text-foreground;
-    }
-}
-
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
-
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit;
-        margin-right: inherit;
-        margin-top: inherit;
-        margin-bottom: inherit;
-        padding-left: inherit;
-        padding-right: inherit;
-        padding-top: inherit;
-        padding-bottom: inherit;
-        column-gap: inherit;
-        row-gap: inherit;
-        gap: inherit;
-        border-left-width: inherit;
-        border-right-width: inherit;
-        border-top-width: inherit;
-        border-bottom-width: inherit;
-        border-left-style: inherit;
-        border-right-style: inherit;
-        border-top-style: inherit;
-        border-bottom-style: inherit;
-        border-left-color: inherit;
-        border-right-color: inherit;
-        border-top-color: inherit;
-        border-bottom-color: inherit;
+        @apply text-foreground;
     }
 }

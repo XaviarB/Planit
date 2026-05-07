@@ -56,8 +56,19 @@ export default function Landing() {
       const { group, member_id } = await createGroup(groupName.trim(), creatorName.trim());
       setLocalMemberId(group.code, member_id);
       addVisitedGroup({ code: group.code, name: group.name });
-      toast.success(`Group "${group.name}" created!`);
-      nav(`/g/${group.code}`);
+
+      // Pre-emptively copy the invite link to the user's clipboard. The Group
+      // page will also show a "copied" toast — auto-share is one less click.
+      const inviteUrl = `${window.location.origin}/g/${group.code}`;
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+      } catch {
+        // Clipboard may be blocked; the Group page will still expose Copy buttons.
+      }
+
+      toast.success(`Group "${group.name}" created — invite link copied!`);
+      // Pass justCreated so /g/{code} can re-confirm the auto-copy.
+      nav(`/g/${group.code}`, { state: { justCreated: true } });
     } catch (err) {
       toast.error("Could not create group. Try again.");
     } finally {
@@ -91,11 +102,11 @@ export default function Landing() {
     <div className="min-h-screen grain" data-testid="landing-page">
       {/* Top nav */}
       <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2 planet-logo-wrap" data-testid="brand-logo">
-          <div className="w-11 h-11 rounded-xl border-2 border-slate-900 bg-[var(--pastel-mint)] grid place-items-center overflow-visible">
+        <div className="flex items-center gap-3 planet-logo-wrap" data-testid="brand-logo">
+          <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl border-[3px] border-slate-900 bg-[var(--pastel-mint)] grid place-items-center overflow-visible shadow-[5px_5px_0_0_var(--ink)]">
             <PlanetIcon />
           </div>
-          <span className="font-heading font-black text-xl">Planit</span>
+          <span className="font-heading font-black text-3xl sm:text-4xl tracking-tight">Planit</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative" ref={howRef}>
@@ -377,7 +388,7 @@ function PlanetIcon() {
   return (
     <svg
       viewBox="0 0 32 32"
-      className="w-9 h-9"
+      className="w-12 h-12 sm:w-14 sm:h-14"
       fill="none"
       aria-hidden="true"
     >

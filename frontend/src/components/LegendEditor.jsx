@@ -10,7 +10,7 @@ const LABELS = [
   "Most free",
   "Everyone free",
 ];
-const DEFAULTS = ["#1E2A78", "#3D4DC7", "#6E5FF0", "#A9A0FF", "#EDE7FF"];
+const DEFAULTS = ["#0f0224", "#7b1fe3", "#c026d3", "#e879f9", "#fae8ff"];
 
 export default function LegendEditor({ code, colors, onUpdated }) {
   const [draft, setDraft] = useState(colors);

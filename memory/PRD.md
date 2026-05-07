@@ -122,3 +122,30 @@ Build a website that can group you and your friends schedules with time slots an
 ## Next Tasks (post-export)
 - Capture binary screenshot set in `/app/screenshots/` once Playwright is available locally
 - Wire up GitHub push and confirm `verify.sh` returns clean diff on a fresh clone
+
+---
+
+## Iteration — 7 May 2026 (cloned from `Xodeius/Natty`)
+
+### What was added
+- **Auto-copy invite link on group creation** — clipboard write happens in `Landing.onCreate` *and* in `Group.jsx` when navigated with `state.justCreated`, so a single click creates+shares.
+- **Enlarged Planet logo + brand name** on Landing nav (`w-16/72` box, `text-3xl/4xl` brand) — uses the previously-empty top-left space.
+- **Week-snapshot navigator** replaces the old static "Adjust dates / hours…" hint banner. Prev/next arrow buttons + a `<input type="range" min=-12 max=12>` slider styled with the heat gradient + a "This week" reset chip. New `weekOffset` state in `Group.jsx` re-derives `week = currentWeekBounds(now, weekOffset)` and the heatmap columns.
+- **`schedule.currentWeekBounds(now, weekOffset)`** — accepts a +/- weeks shift.
+- **Quick stats always read the week snapshot** — regardless of `tab` / `editMode`. `columns=heatmapColumns`, `hourFrom=0`, `hourTo=23`, `minuteStep=60`.
+- **Heatmap palettes are theme-aware** — `--heat-*` CSS variables: light = neon purple gradient (`#0f0224 → #fae8ff`), dark = neon blue gradient (`#020617 → #cffafe`). `Group.jsx` watches `html.dark` via `MutationObserver` and forces a `NEON_BLUE_PALETTE` for `HeatmapGrid` in dark mode (so dark mode is *always* neon blue, even if a user customised colours via `LegendEditor` in light mode). New backend defaults + `LegendEditor` defaults updated to the neon-purple set.
+- **Editor toolbar reordered** — `Clear view` + `Customize labels` on the top row (right-aligned), `Precision` toggle on the row below (left-aligned). Two evenly-balanced rows.
+
+### Files touched
+- `frontend/src/lib/schedule.js` — `currentWeekBounds(now, weekOffset)`
+- `frontend/src/pages/Landing.jsx` — bigger logo/brand, auto-copy on create
+- `frontend/src/pages/Group.jsx` — week navigator, `weekOffset` state, theme-aware palette, auto-copy from `state.justCreated`, QuickStats locked to week snapshot
+- `frontend/src/components/AvailabilityEditor.jsx` — toolbar reorder
+- `frontend/src/components/LegendEditor.jsx` — neon-purple `DEFAULTS`
+- `frontend/src/index.css` — neon `--heat-*` light + dark sets, `.week-slider` styling
+- `backend/server.py` — neon-purple `heat_colors` defaults + backfill
+
+### Verified
+- Light + dark visually confirmed via screenshots (heatmap, legend, slider, editor, landing)
+- Backend create returns `heat_colors=['#0f0224','#7b1fe3','#c026d3','#e879f9','#fae8ff']`
+- ESLint + Ruff clean

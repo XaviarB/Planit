@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
   getGroup,
@@ -19,12 +19,13 @@ import LegendEditor from "../components/LegendEditor";
 import GroupMenu from "../components/GroupMenu";
 import SuggestMeeting from "../components/SuggestMeeting";
 import MembersSchedule from "../components/MembersSchedule";
-import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X } from "lucide-react";
+import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function GroupPage() {
   const { code } = useParams();
   const nav = useNavigate();
+  const location = useLocation();
   const [group, setGroup] = useState(null);
   const [memberId, setMemberId] = useState(getLocalMemberId(code));
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,9 @@ export default function GroupPage() {
   const [hourTo, setHourTo] = useState(typeof persisted.hourTo === "number" ? persisted.hourTo : 23);
   const [minuteStep, setMinuteStep] = useState(persisted.minuteStep || 60); // 60 | 30 | 15
   const [focusMemberIds, setFocusMemberIds] = useState(persisted.focusMemberIds || []);
+  // Week-offset for the Sync Our Orbits snapshot. 0 = this week, -1 = last, +1 = next.
+  // Always starts at 0 on mount (does not persist — feels weird to land in a different week).
+  const [weekOffset, setWeekOffset] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [joinOpen, setJoinOpen] = useState(false);
   const editorRef = useRef(null);
@@ -63,6 +67,24 @@ export default function GroupPage() {
     const id = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Track current theme so we can swap the heatmap palette.
+  // Light mode → neon purple gradient (stored heat_colors, default = purple).
+  // Dark  mode → neon blue gradient (always, even if user customized in light).
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const target = document.documentElement;
+    const obs = new MutationObserver(() => {
+      setIsDark(target.classList.contains("dark"));
+    });
+    obs.observe(target, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  // Neon blue gradient — used for the dark-mode heatmap regardless of stored colors.
+  const NEON_BLUE_PALETTE = ["#020617", "#1e40af", "#0ea5e9", "#22d3ee", "#cffafe"];
   const [joinName, setJoinName] = useState("");
 
   const refresh = useCallback(async () => {
@@ -81,6 +103,24 @@ export default function GroupPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Auto-copy invite link when the user has just created a group (passed via
+  // location.state from Landing) — one-tap shareable link with no extra click.
+  useEffect(() => {
+    if (!loading && group && location.state && location.state.justCreated) {
+      const url = `${window.location.origin}/g/${code}`;
+      try {
+        navigator.clipboard.writeText(url);
+        toast.success("Invite link copied — paste it to your crew!", {
+          duration: 4500,
+        });
+      } catch {
+        // Clipboard may be blocked; ignore — share button still works.
+      }
+      // Clear the flag so subsequent navigations don't re-copy.
+      nav(location.pathname, { replace: true, state: {} });
+    }
+  }, [loading, group, location, code, nav]);
 
   // If no local member id, prompt to join
   useEffect(() => {
@@ -126,9 +166,10 @@ export default function GroupPage() {
     label: formatDateShort(iso),
   }));
 
-  // Sync Our Orbits (heatmap, non-edit) is locked to the current Mon→Sun
-  // week, full 24-hour day, hourly precision — a static weekly snapshot.
-  const week = currentWeekBounds(now);
+  // Sync Our Orbits (heatmap, non-edit) is locked to a Mon→Sun week, full
+  // 24-hour day, hourly precision. The user can scrub through past/future
+  // weeks via the week navigator — that's the only thing that changes here.
+  const week = currentWeekBounds(now, weekOffset);
   const heatmapColumns = dateRange(week.monday, week.sunday).map((iso) => ({
     key: iso,
     label: formatDateShort(iso),
@@ -307,17 +348,17 @@ export default function GroupPage() {
 
           <QuickStats
             members={visibleMembers}
-            columns={tab === "dates" && !editMode ? heatmapColumns : columns}
+            columns={heatmapColumns}
             mode="date"
-            hourFrom={tab === "dates" && !editMode ? 0 : hourFrom}
-            hourTo={tab === "dates" && !editMode ? 23 : hourTo}
+            hourFrom={0}
+            hourTo={23}
             minuteStep={60}
             meId={memberId}
           />
 
           <LegendEditor
             code={code}
-            colors={group.heat_colors || ["#1E2A78", "#3D4DC7", "#6E5FF0", "#A9A0FF", "#EDE7FF"]}
+            colors={group.heat_colors || ["#0f0224", "#7b1fe3", "#c026d3", "#e879f9", "#fae8ff"]}
             onUpdated={(next) => setGroup((g) => ({ ...g, heat_colors: next }))}
           />
 
@@ -415,21 +456,85 @@ export default function GroupPage() {
             </div>
           )}
 
-          {/* Sync Our Orbits banner — explains that the snapshot is fixed. */}
+          {/* Sync Our Orbits — week-snapshot navigator with prev/next + slider. */}
           {tab === "dates" && !editMode && (
             <div
-              className="neo-card p-3 flex items-center gap-2 text-xs"
+              className="neo-card p-3 sm:p-4 flex flex-wrap items-center gap-3"
               style={{ background: "var(--pastel-mint)" }}
               data-testid="weekly-snapshot-banner"
             >
-              <span className="label-caps">This week's snapshot</span>
-              <span style={{ color: "var(--ink-soft)" }}>
-                {formatDateShort(week.monday)} → {formatDateShort(week.sunday)} · all 24 hours · 1-hour blocks
+              <span className="label-caps shrink-0">Week snapshot</span>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  onClick={() => setWeekOffset((o) => o - 1)}
+                  data-testid="week-prev-btn"
+                  aria-label="Previous week"
+                  title="Previous week"
+                >
+                  <ChevronLeft className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+                <span
+                  className="font-heading font-black text-sm sm:text-base whitespace-nowrap min-w-[140px] text-center"
+                  data-testid="week-snapshot-label"
+                >
+                  {formatDateShort(week.monday)} → {formatDateShort(week.sunday)}
+                </span>
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  onClick={() => setWeekOffset((o) => o + 1)}
+                  data-testid="week-next-btn"
+                  aria-label="Next week"
+                  title="Next week"
+                >
+                  <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              </div>
+
+              <input
+                type="range"
+                min={-12}
+                max={12}
+                step={1}
+                value={weekOffset}
+                onChange={(e) => setWeekOffset(Number(e.target.value))}
+                className="week-slider flex-1 min-w-[120px]"
+                data-testid="week-slider"
+                aria-label="Scrub weeks"
+                title={
+                  weekOffset === 0
+                    ? "This week"
+                    : weekOffset < 0
+                    ? `${-weekOffset} week${weekOffset === -1 ? "" : "s"} ago`
+                    : `${weekOffset} week${weekOffset === 1 ? "" : "s"} ahead`
+                }
+              />
+
+              <span
+                className="text-[11px] font-bold uppercase tracking-wider shrink-0"
+                style={{ color: "var(--ink-soft)" }}
+                data-testid="week-offset-label"
+              >
+                {weekOffset === 0
+                  ? "This week"
+                  : weekOffset < 0
+                  ? `${-weekOffset}w ago`
+                  : `+${weekOffset}w`}
               </span>
-              <span className="flex-1" />
-              <span className="text-[11px]" style={{ color: "var(--ink-soft)" }}>
-                Adjust dates / hours in Members' schedule or Edit my availability
-              </span>
+
+              {weekOffset !== 0 && (
+                <button
+                  type="button"
+                  className="neo-btn ghost text-xs"
+                  onClick={() => setWeekOffset(0)}
+                  data-testid="week-reset-btn"
+                >
+                  This week
+                </button>
+              )}
             </div>
           )}
 
@@ -515,7 +620,7 @@ export default function GroupPage() {
               hourFrom={0}
               hourTo={23}
               minuteStep={60}
-              heatColors={group.heat_colors}
+              heatColors={isDark ? NEON_BLUE_PALETTE : group.heat_colors}
               focusMode={focusedMembers.length > 0}
               compareCount={focusedMembers.length}
             />

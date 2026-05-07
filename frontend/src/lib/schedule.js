@@ -107,12 +107,13 @@ export const dateRange = (startDate, endDate) => {
 };
 
 // Returns the ISO Monday and Sunday bounding the week of `now` (defaults to today).
-export const currentWeekBounds = (now = new Date()) => {
+// `weekOffset` shifts the week: -1 = previous week, +1 = next week, etc.
+export const currentWeekBounds = (now = new Date(), weekOffset = 0) => {
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const jsDay = d.getDay(); // 0=Sun..6=Sat
   const mondayOffset = (jsDay + 6) % 7; // days back to Monday
   const monday = new Date(d);
-  monday.setDate(d.getDate() - mondayOffset);
+  monday.setDate(d.getDate() - mondayOffset + (weekOffset | 0) * 7);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   const fmt = (x) => {

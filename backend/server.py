@@ -68,11 +68,11 @@ class Group(BaseModel):
     members: List[Member] = []
     reasons: List[BusyReason] = []
     heat_colors: List[str] = Field(default_factory=lambda: [
-        "#1E2A78",  # 0 free  — deep neon-blue (darkest)
-        "#3D4DC7",  # 1 (a few) — electric blue/purple
-        "#6E5FF0",  # 2 (half) — neon violet
-        "#A9A0FF",  # 3 (most) — lavender glow
-        "#EDE7FF",  # 4 (everyone) — pearl (lightest)
+        "#0f0224",  # 0 free  — deep cosmic violet (darkest)
+        "#7b1fe3",  # 1 (a few) — neon purple
+        "#c026d3",  # 2 (half) — neon magenta
+        "#e879f9",  # 3 (most) — bright lavender pink
+        "#fae8ff",  # 4 (everyone) — pearl glow (lightest)
     ])
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -152,7 +152,7 @@ async def get_group(code: str):
     # Backfill heat_colors for older docs
     if not g.get("heat_colors"):
         g["heat_colors"] = [
-            "#1E2A78", "#3D4DC7", "#6E5FF0", "#A9A0FF", "#EDE7FF",
+            "#0f0224", "#7b1fe3", "#c026d3", "#e879f9", "#fae8ff",
         ]
     return g
 

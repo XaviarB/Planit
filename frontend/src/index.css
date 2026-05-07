@@ -16,11 +16,12 @@
     --pastel-yellow: #fef9e7;
     --pastel-lavender: #f4ecf7;
     --pastel-peach: #fde2d3;
-    --heat-0: #1E2A78;
-    --heat-1: #3D4DC7;
-    --heat-2: #6E5FF0;
-    --heat-3: #A9A0FF;
-    --heat-all: #EDE7FF;
+    /* Neon purple gradient (nobody → everyone free) */
+    --heat-0: #0f0224;
+    --heat-1: #7b1fe3;
+    --heat-2: #c026d3;
+    --heat-3: #e879f9;
+    --heat-all: #fae8ff;
 }
 
 html.dark {
@@ -35,11 +36,12 @@ html.dark {
     --pastel-yellow: #3d3520;
     --pastel-lavender: #2e1f3d;
     --pastel-peach: #3a2620;
-    --heat-0: #07091e;
-    --heat-1: #1a1240;
-    --heat-2: #3d2c8a;
-    --heat-3: #6b5fc4;
-    --heat-all: #b9b3f0;
+    /* Neon blue gradient (nobody → everyone free) */
+    --heat-0: #020617;
+    --heat-1: #1e40af;
+    --heat-2: #0ea5e9;
+    --heat-3: #22d3ee;
+    --heat-all: #cffafe;
 }
 
 html,
@@ -363,6 +365,42 @@ html.dark .bg-slate-900\/50 {
 .scroll-x {
     overflow-x: auto;
     scrollbar-width: thin;
+}
+
+/* Week-snapshot slider — neon thumb that matches the heatmap palette. */
+.week-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--heat-1),
+        var(--heat-2),
+        var(--heat-3)
+    );
+    border: 2px solid var(--ink);
+    outline: none;
+    cursor: pointer;
+}
+.week-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--heat-2);
+    border: 2px solid var(--ink);
+    box-shadow: 0 0 0 2px var(--card), 2px 2px 0 0 var(--ink);
+    cursor: grab;
+}
+.week-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--heat-2);
+    border: 2px solid var(--ink);
+    cursor: grab;
 }
 
 @layer base {

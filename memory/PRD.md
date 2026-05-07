@@ -179,3 +179,18 @@ Build a website that can group you and your friends schedules with time slots an
 - ESLint clean across all 4 files
 - Share menu opens, lists 31 tiles, search filter works ("what" → 1 result)
 - Logo hover triggers globe rotation; idle shows static halo + dim stars
+
+---
+
+## Iteration — 7 May 2026 · part 3 (layout polish)
+
+### Changes
+- **Sidebar reorder** (`Group.jsx`): Quick stats → Invite friends → Heatmap legend → Members.
+  Members card is now at the bottom; the page leads with stats + share so brand-new visitors are pushed toward the next action.
+- **Week-snapshot navigator** simplified: dropped the `<input type="range">` slider, kept only the prev/next chevron buttons (now `w-11 h-11`). Date label upsized to `text-xl sm:text-2xl font-black`, "WEEK SNAPSHOT" caption to `text-sm/base`, "This week"/offset readout to `text-sm`. Removed the now-unused `.week-slider` CSS rule.
+- **Share menu** redesigned (`ShareMenu.jsx`): the 4-column grid was replaced with a single **horizontal scroller** (`.share-scroller` snap-x, hidden bulk scrollbar). Same 31 brand tiles + the search input — easier to interpret because the user sees just 4 tiles at a time and either scrolls or searches.
+- **Landing bottom** (`Landing.jsx`): rebuilt with bigger spacing — `pt-12 pb-32` on the closing section, `mt-20` between feature cards and the closing kicker, `gap-8` between cards. Each feature card now uses `p-7` with `text-2xl` titles and bigger icons. The mid-page slogan was removed in favour of a giant **"Plan less. Planit."** orbit-font kicker (`text-7xl`) at the very bottom that doubles as the page's final beat.
+
+### Verified
+- ESLint clean across all touched files
+- Side-by-side screenshots: sidebar order correct (QuickStats top, Members bottom); week banner has bigger fonts + only arrow buttons; share menu scroller shows 4 tiles + scroll hint; closing slogan is the visual anchor of the page

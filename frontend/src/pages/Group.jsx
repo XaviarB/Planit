@@ -282,8 +282,47 @@ export default function GroupPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-12 gap-6">
-        {/* Sidebar — top of Members card aligns with top of the main scheduling grid. */}
+        {/* Sidebar — order: Quick stats → Invite friends → Heatmap legend → Members. */}
         <aside className="lg:col-span-3 space-y-6">
+          <QuickStats
+            members={visibleMembers}
+            columns={heatmapColumns}
+            mode="date"
+            hourFrom={0}
+            hourTo={23}
+            minuteStep={60}
+            meId={memberId}
+          />
+
+          <div className="neo-card p-4" data-testid="share-card">
+            <div className="label-caps mb-3 flex items-center gap-2">
+              <Share2 className="w-4 h-4" /> Invite friends
+            </div>
+            <div className="flex flex-col gap-2">
+              <ShareMenu
+                url={`${window.location.origin}/g/${code}`}
+                groupName={group.name}
+              />
+              <button
+                className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
+                onClick={onCopyCode}
+                data-testid="copy-code-btn"
+              >
+                <span className="label-caps">Code</span>
+                <span className="flex items-center gap-2">
+                  <span className="font-mono tracking-widest font-bold">{group.code}</span>
+                  <Copy className="w-4 h-4" />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <LegendEditor
+            code={code}
+            colors={group.heat_colors || ["#0f0224", "#7b1fe3", "#c026d3", "#e879f9", "#fae8ff"]}
+            onUpdated={(next) => setGroup((g) => ({ ...g, heat_colors: next }))}
+          />
+
           <div className="neo-card p-5" data-testid="members-card">
             <div className="label-caps mb-3 flex items-center gap-2">
               <Users className="w-4 h-4" /> Members ({group.members.length})
@@ -322,45 +361,6 @@ export default function GroupPage() {
                 Tap another member's bubble to compare.
               </p>
             )}
-          </div>
-
-          <QuickStats
-            members={visibleMembers}
-            columns={heatmapColumns}
-            mode="date"
-            hourFrom={0}
-            hourTo={23}
-            minuteStep={60}
-            meId={memberId}
-          />
-
-          <LegendEditor
-            code={code}
-            colors={group.heat_colors || ["#0f0224", "#7b1fe3", "#c026d3", "#e879f9", "#fae8ff"]}
-            onUpdated={(next) => setGroup((g) => ({ ...g, heat_colors: next }))}
-          />
-
-          <div className="neo-card p-4" data-testid="share-card">
-            <div className="label-caps mb-3 flex items-center gap-2">
-              <Share2 className="w-4 h-4" /> Invite friends
-            </div>
-            <div className="flex flex-col gap-2">
-              <ShareMenu
-                url={`${window.location.origin}/g/${code}`}
-                groupName={group.name}
-              />
-              <button
-                className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
-                onClick={onCopyCode}
-                data-testid="copy-code-btn"
-              >
-                <span className="label-caps">Code</span>
-                <span className="flex items-center gap-2">
-                  <span className="font-mono tracking-widest font-bold">{group.code}</span>
-                  <Copy className="w-4 h-4" />
-                </span>
-              </button>
-            </div>
           </div>
         </aside>
 
@@ -431,85 +431,69 @@ export default function GroupPage() {
             </div>
           )}
 
-          {/* Sync Our Orbits — week-snapshot navigator with prev/next + slider. */}
+          {/* Sync Our Orbits — week-snapshot navigator with prev/next arrows. */}
           {tab === "dates" && !editMode && (
             <div
-              className="neo-card p-3 sm:p-4 flex flex-wrap items-center gap-3"
+              className="neo-card p-4 sm:p-5 flex flex-wrap items-center justify-center sm:justify-between gap-4"
               style={{ background: "var(--pastel-mint)" }}
               data-testid="weekly-snapshot-banner"
             >
-              <span className="label-caps shrink-0">Week snapshot</span>
+              <span className="label-caps text-sm sm:text-base shrink-0">
+                Week snapshot
+              </span>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 shrink-0">
                 <button
                   type="button"
-                  className="w-8 h-8 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
                   onClick={() => setWeekOffset((o) => o - 1)}
                   data-testid="week-prev-btn"
                   aria-label="Previous week"
                   title="Previous week"
                 >
-                  <ChevronLeft className="w-4 h-4" strokeWidth={2.5} />
+                  <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
                 </button>
                 <span
-                  className="font-heading font-black text-sm sm:text-base whitespace-nowrap min-w-[140px] text-center"
+                  className="font-heading font-black text-xl sm:text-2xl whitespace-nowrap min-w-[200px] text-center tracking-tight"
                   data-testid="week-snapshot-label"
                 >
                   {formatDateShort(week.monday)} → {formatDateShort(week.sunday)}
                 </span>
                 <button
                   type="button"
-                  className="w-8 h-8 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
                   onClick={() => setWeekOffset((o) => o + 1)}
                   data-testid="week-next-btn"
                   aria-label="Next week"
                   title="Next week"
                 >
-                  <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+                  <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
                 </button>
               </div>
 
-              <input
-                type="range"
-                min={-12}
-                max={12}
-                step={1}
-                value={weekOffset}
-                onChange={(e) => setWeekOffset(Number(e.target.value))}
-                className="week-slider flex-1 min-w-[120px]"
-                data-testid="week-slider"
-                aria-label="Scrub weeks"
-                title={
-                  weekOffset === 0
+              <div className="flex items-center gap-3 shrink-0">
+                <span
+                  className="text-sm font-bold uppercase tracking-wider"
+                  style={{ color: "var(--ink-soft)" }}
+                  data-testid="week-offset-label"
+                >
+                  {weekOffset === 0
                     ? "This week"
                     : weekOffset < 0
                     ? `${-weekOffset} week${weekOffset === -1 ? "" : "s"} ago`
-                    : `${weekOffset} week${weekOffset === 1 ? "" : "s"} ahead`
-                }
-              />
-
-              <span
-                className="text-[11px] font-bold uppercase tracking-wider shrink-0"
-                style={{ color: "var(--ink-soft)" }}
-                data-testid="week-offset-label"
-              >
-                {weekOffset === 0
-                  ? "This week"
-                  : weekOffset < 0
-                  ? `${-weekOffset}w ago`
-                  : `+${weekOffset}w`}
-              </span>
-
-              {weekOffset !== 0 && (
-                <button
-                  type="button"
-                  className="neo-btn ghost text-xs"
-                  onClick={() => setWeekOffset(0)}
-                  data-testid="week-reset-btn"
-                >
-                  This week
-                </button>
-              )}
+                    : `${weekOffset} week${weekOffset === 1 ? "" : "s"} ahead`}
+                </span>
+                {weekOffset !== 0 && (
+                  <button
+                    type="button"
+                    className="neo-btn ghost text-sm"
+                    onClick={() => setWeekOffset(0)}
+                    data-testid="week-reset-btn"
+                  >
+                    This week
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

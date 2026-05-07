@@ -383,40 +383,25 @@ html.dark .bg-slate-900\/50 {
     scrollbar-width: thin;
 }
 
-/* Week-snapshot slider — neon thumb that matches the heatmap palette. */
-.week-slider {
-    -webkit-appearance: none;
-    appearance: none;
+/* Horizontal share-targets scroller — pill snap, hide chunky scrollbar. */
+.share-scroller {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink) transparent;
+    padding-bottom: 6px;
+}
+.share-scroller::-webkit-scrollbar {
     height: 6px;
+}
+.share-scroller::-webkit-scrollbar-thumb {
+    background: var(--ink);
     border-radius: 999px;
-    background: linear-gradient(
-        to right,
-        var(--heat-1),
-        var(--heat-2),
-        var(--heat-3)
-    );
-    border: 2px solid var(--ink);
-    outline: none;
-    cursor: pointer;
 }
-.week-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--heat-2);
-    border: 2px solid var(--ink);
-    box-shadow: 0 0 0 2px var(--card), 2px 2px 0 0 var(--ink);
-    cursor: grab;
-}
-.week-slider::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--heat-2);
-    border: 2px solid var(--ink);
-    cursor: grab;
+.share-scroller::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 @layer base {

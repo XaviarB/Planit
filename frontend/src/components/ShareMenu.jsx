@@ -132,7 +132,8 @@ export default function ShareMenu({ url, groupName }) {
 
       {open && (
         <div
-          className="absolute z-50 mt-2 left-0 right-0 sm:left-auto sm:right-0 sm:w-[360px] neo-card p-4 max-h-[70vh] overflow-y-auto"
+          className="absolute z-50 mt-2 left-0 right-0 sm:left-auto sm:right-0 sm:w-[360px] neo-card p-4"
+          style={{ background: "var(--card)" }}
           data-testid="share-menu-dropdown"
           role="dialog"
           aria-label="Share invite link"
@@ -150,7 +151,7 @@ export default function ShareMenu({ url, groupName }) {
             </button>
           </div>
 
-          {/* Link preview row */}
+          {/* Link preview row — single tap copies. */}
           <button
             type="button"
             onClick={() => copyLink()}
@@ -193,17 +194,38 @@ export default function ShareMenu({ url, groupName }) {
             />
           </div>
 
-          {/* Brand grid */}
-          <div className="grid grid-cols-4 gap-2" data-testid="share-targets-grid">
-            {filtered.map((t) => (
-              <BrandTile key={t.id} target={t} onClick={() => onTargetClick(t)} />
-            ))}
-            {filtered.length === 0 && (
-              <div className="col-span-4 text-center text-xs py-4" style={{ color: "var(--ink-mute)" }}>
-                No matches — try "WhatsApp", "Email", "Discord"…
+          {/* Horizontal scroller — keeps the menu compact. Swipe / drag / wheel.
+              Search filters this same list for users who know exactly what they want. */}
+          {filtered.length > 0 ? (
+            <div className="share-scroller" data-testid="share-targets-scroller">
+              <div className="flex gap-3 px-0.5">
+                {filtered.map((t) => (
+                  <BrandTile
+                    key={t.id}
+                    target={t}
+                    onClick={() => onTargetClick(t)}
+                  />
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div
+              className="text-center text-xs py-4"
+              style={{ color: "var(--ink-mute)" }}
+              data-testid="share-no-results"
+            >
+              No matches — try "WhatsApp", "Email", "Discord"…
+            </div>
+          )}
+
+          {filtered.length > 0 && (
+            <p
+              className="mt-2 text-[10px] text-center label-caps"
+              style={{ color: "var(--ink-mute)" }}
+            >
+              ← scroll for more →
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -216,28 +238,33 @@ function BrandTile({ target, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border-2 border-slate-900 bg-white hover:scale-[1.04] transition shadow-[2px_2px_0_0_var(--ink)] hover:shadow-[3px_3px_0_0_var(--ink)]"
+      className="group flex flex-col items-center justify-start gap-1.5 shrink-0 w-[68px] snap-start"
       data-testid={`share-target-${target.id}`}
       title={`Share via ${target.name}`}
+      style={{ scrollSnapAlign: "start" }}
     >
       <span
-        className="w-10 h-10 rounded-lg grid place-items-center shrink-0"
+        className="w-12 h-12 rounded-xl grid place-items-center shrink-0 border-2 transition group-hover:scale-[1.08] group-hover:-translate-y-0.5"
         style={{
           background: `#${target.color}`,
-          border: "2px solid var(--ink)",
+          borderColor: "var(--ink)",
+          boxShadow: "2px 2px 0 0 var(--ink)",
         }}
       >
         <img
           src={iconUrl}
           alt={target.name}
-          className="w-5 h-5"
-          width="20"
-          height="20"
+          className="w-6 h-6"
+          width="24"
+          height="24"
           loading="lazy"
           referrerPolicy="no-referrer"
         />
       </span>
-      <span className="text-[10px] font-bold leading-tight text-center line-clamp-2" style={{ color: "var(--ink)" }}>
+      <span
+        className="text-[10px] font-bold leading-tight text-center line-clamp-2 w-full"
+        style={{ color: "var(--ink)" }}
+      >
         {target.name}
       </span>
     </button>

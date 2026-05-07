@@ -218,16 +218,6 @@ export default function Landing() {
               </button>
             </form>
           </div>
-
-          {/* Slogan under the create/join forms */}
-          <div className="mt-8 text-center" data-testid="slogan">
-            <p className="font-orbit text-xl sm:text-2xl text-slate-900">
-              Plan less. Planit.
-            </p>
-            <p className="mt-2 text-sm sm:text-base text-slate-600 leading-relaxed">
-              Find your crew's common orbit — in seconds, not group-chat threads.
-            </p>
-          </div>
         </div>
 
         {/* Right bento */}
@@ -276,68 +266,83 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Filler section (replaces "Three steps, zero friction" — now lives inside HOW IT WORKS dropdown) */}
-      <section id="how" className="max-w-6xl mx-auto px-6 pb-24">
-        <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
-          <div>
-            <div className="label-caps text-slate-500 mb-2">Built for spontaneous plans</div>
-            <h2 className="font-heading font-black text-3xl sm:text-4xl tracking-tight">
-              Stop the group-chat ping pong.
+      {/* Closing CTA — bigger spacing, slogan as the punchline. */}
+      <section id="how" className="max-w-6xl mx-auto px-6 pt-12 pb-32">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14">
+          <div className="max-w-xl">
+            <div className="label-caps text-slate-500 mb-3">
+              Built for spontaneous plans
+            </div>
+            <h2 className="font-heading font-black text-4xl sm:text-5xl tracking-tight leading-[1.05]">
+              Stop the group-chat<br className="hidden sm:inline" /> ping pong.
             </h2>
           </div>
-          <p className="text-slate-700 max-w-md leading-relaxed">
-            Planit replaces the back-and-forth with one shared canvas. Everyone
-            paints when they're busy — the empty hours speak for themselves.
+          <p className="text-slate-700 max-w-md leading-relaxed text-base sm:text-lg">
+            Planit replaces the back-and-forth with one shared canvas.
+            Everyone paints when they're busy — the empty hours speak for
+            themselves.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="neo-card p-6 bg-[var(--pastel-yellow)]">
-            <div className="w-10 h-10 rounded-xl border-2 border-slate-900 bg-white grid place-items-center mb-3">
-              <Zap className="w-5 h-5" strokeWidth={2.5} />
+        <div className="grid md:grid-cols-3 gap-6 sm:gap-8">
+          <div className="neo-card p-7 bg-[var(--pastel-yellow)]">
+            <div className="w-12 h-12 rounded-xl border-2 border-slate-900 bg-white grid place-items-center mb-4">
+              <Zap className="w-6 h-6" strokeWidth={2.5} />
             </div>
-            <div className="font-heading font-black text-xl mb-1">10-second start</div>
-            <p className="text-slate-700 leading-snug text-sm">
+            <div className="font-heading font-black text-2xl mb-2">10-second start</div>
+            <p className="text-slate-700 leading-relaxed text-sm">
               No signups, no email confirmations. A six-character code is the
               only thing your friends ever need.
             </p>
           </div>
-          <div className="neo-card p-6 bg-[var(--pastel-lavender)]">
+          <div className="neo-card p-7 bg-[var(--pastel-lavender)]">
             <div
-              className="rocket-wrap w-10 h-10 rounded-xl border-2 border-slate-900 bg-white grid place-items-center mb-3"
+              className="rocket-wrap w-12 h-12 rounded-xl border-2 border-slate-900 bg-white grid place-items-center mb-4"
               data-testid="rocket-hover"
             >
-              <Rocket className="rocket-icon w-5 h-5" strokeWidth={2.5} />
+              <Rocket className="rocket-icon w-6 h-6" strokeWidth={2.5} />
               <span className="rocket-flame" />
               <span className="rocket-flame small" />
             </div>
-            <div className="font-heading font-black text-xl mb-1">Built for crews</div>
-            <p className="text-slate-700 leading-snug text-sm">
+            <div className="font-heading font-black text-2xl mb-2">Built for crews</div>
+            <p className="text-slate-700 leading-relaxed text-sm">
               Roommates, study groups, weekend warriors. The heatmap scales
               from two friends to twenty.
             </p>
           </div>
-          <div className="neo-card p-6 bg-[var(--pastel-peach)]">
-            <div className="w-10 h-10 rounded-xl border-2 border-slate-900 bg-white grid place-items-center mb-3">
-              <Share2 className="w-5 h-5" strokeWidth={2.5} />
+          <div className="neo-card p-7 bg-[var(--pastel-peach)]">
+            <div className="w-12 h-12 rounded-xl border-2 border-slate-900 bg-white grid place-items-center mb-4">
+              <Share2 className="w-6 h-6" strokeWidth={2.5} />
             </div>
-            <div className="font-heading font-black text-xl mb-1">One-link share</div>
-            <p className="text-slate-700 leading-snug text-sm">
+            <div className="font-heading font-black text-2xl mb-2">One-link share</div>
+            <p className="text-slate-700 leading-relaxed text-sm">
               Copy. Paste. Done. Drop the link anywhere DMs, group chats,
               calendars, sticky notes.
             </p>
           </div>
         </div>
 
-        <div className="mt-10 neo-card p-6 flex flex-col items-center justify-center gap-3 bg-white text-center">
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Clock3 className="w-5 h-5" strokeWidth={2.5} />
-            <span className="font-heading font-black">Curious how it works?</span>
-            <span className="text-slate-700 text-sm">
-              Tap "How it works" up top for the three-step rundown.
+        {/* Closing slogan kicker — gives the page a memorable last beat. */}
+        <div
+          className="mt-20 sm:mt-24 flex flex-col items-center text-center gap-4"
+          data-testid="closing-slogan"
+        >
+          <span className="label-caps text-slate-500 inline-flex items-center gap-2">
+            <Clock3 className="w-4 h-4" strokeWidth={2.5} />
+            No account · No tracking · Just 10 seconds
+          </span>
+          <p className="font-orbit text-5xl sm:text-6xl lg:text-7xl tracking-tight leading-none">
+            Plan less.{" "}
+            <span className="bg-[var(--pastel-mint)] px-3 rounded-xl border-2 border-slate-900 inline-block">
+              Planit.
             </span>
-          </div>
-          <span className="label-caps text-slate-500">No account · No tracking · Just 10sec</span>
+          </p>
+          <p
+            className="max-w-lg text-base sm:text-lg leading-relaxed mt-2"
+            style={{ color: "var(--ink-soft)" }}
+          >
+            Find your crew's common orbit — in seconds, not group-chat threads.
+          </p>
         </div>
       </section>
     </div>

@@ -94,7 +94,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen grain" data-testid="landing-page">
-      {/* Top nav */}
+      {/* Top nav — elevated to match Group dashboard: bigger pill nav + larger theme toggle. */}
       <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 py-6">
         <div className="flex items-center gap-3 planet-logo-wrap" data-testid="brand-logo">
           <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl border-[3px] border-slate-900 bg-[var(--pastel-mint)] grid place-items-center overflow-visible shadow-[5px_5px_0_0_var(--ink)]">
@@ -107,13 +107,14 @@ export default function Landing() {
             <button
               type="button"
               onClick={() => setHowOpen((v) => !v)}
-              className="label-caps hidden sm:flex items-center gap-1 px-3 py-2 rounded-full border-2 border-transparent hover:border-slate-900 transition"
+              className="hidden sm:flex items-center gap-2 px-5 py-3 rounded-full border-2 border-slate-900 bg-white hover:bg-[var(--pastel-mint)] font-heading font-bold text-sm uppercase tracking-[0.12em] transition"
+              style={{ boxShadow: "3px 3px 0 0 var(--ink)" }}
               data-testid="landing-how-link"
               aria-expanded={howOpen}
             >
               How it works
               <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform ${howOpen ? "rotate-180" : ""}`}
+                className={`w-4 h-4 transition-transform ${howOpen ? "rotate-180" : ""}`}
               />
             </button>
             {howOpen && (
@@ -135,7 +136,7 @@ export default function Landing() {
               </div>
             )}
           </div>
-          <ThemeToggle />
+          <ThemeToggle className="w-12 h-12 shadow-[3px_3px_0_0_var(--ink)]" />
         </div>
       </nav>
 
@@ -192,12 +193,13 @@ export default function Landing() {
               />
               <button
                 type="submit"
-                className="neo-btn w-full flex items-center justify-center gap-2"
+                className="neo-btn w-full flex items-center justify-center gap-2 text-base"
+                style={{ padding: "16px 22px" }}
                 disabled={creating}
                 data-testid="create-group-submit-btn"
               >
                 {creating ? "Creating..." : "Create group"}
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-5 h-5" />
               </button>
             </form>
 
@@ -223,12 +225,13 @@ export default function Landing() {
               />
               <button
                 type="submit"
-                className="neo-btn ghost w-full flex items-center justify-center gap-2"
+                className="neo-btn ghost w-full flex items-center justify-center gap-2 text-base"
+                style={{ padding: "16px 22px" }}
                 disabled={joining}
                 data-testid="join-group-submit-btn"
               >
                 {joining ? "Joining..." : "Join group"}
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-5 h-5" />
               </button>
             </form>
           </div>

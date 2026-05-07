@@ -89,9 +89,23 @@ export default function ShareMenu({ url, groupName }) {
 
   const onTargetClick = async (t) => {
     if (!t.build) {
+      // Copy-only platforms (Discord, Slack, Instagram, etc.) — clipboard
+      // is the entire payload, so we just copy and tell the user where to paste.
       await copyLink(t.copyHint || `Link copied — paste it in ${t.name}.`);
       return;
     }
+
+    // For URL-share platforms we PRE-COPY the link first, then open the share
+    // intent. This is a safety net: some mobile clients (notably certain
+    // Android WhatsApp builds) drop the pre-filled text, so a clipboard copy
+    // means the user can paste with one tap if the prefill silently fails.
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      toast.success(`Link copied — opening ${t.name}…`, { duration: 2500 });
+    } else {
+      toast.message(`Opening ${t.name}…`, { duration: 2000 });
+    }
+
     const href = t.build(ctx);
     // mailto:/sms:/viber: schemes navigate the current tab; everything web opens new tab.
     const isScheme = /^(mailto|sms|viber):/i.test(href);

@@ -9,7 +9,7 @@ import time
 from typing import Dict, Any, Optional
 
 # Backend URL from frontend/.env
-BASE_URL = "https://planit-custom.preview.emergentagent.com/api"
+BASE_URL = "https://planit-editor.preview.emergentagent.com/api"
 
 # Test configuration
 TIMEOUT = 90  # Generous timeout for Gemini calls (10-25s typical)

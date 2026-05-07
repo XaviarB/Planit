@@ -7,7 +7,7 @@ import { buildTimeSlots, timeLabel, buildSlotMap, buildBusyIndex, memberStatusAt
  * Computes top N time slots where the most members are free, at the active
  * `minuteStep` precision.
  */
-export default function SuggestMeeting({ members, columns, mode, hourFrom, hourTo, minuteStep = 60, groupName, groupCode }) {
+export default function SuggestMeeting({ members, columns, mode, hourFrom, hourTo, minuteStep = 60, groupName, groupCode, triggerClassName, wrapperClassName }) {
   const [open, setOpen] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [confirmFor, setConfirmFor] = useState(null); // suggestion to confirm
@@ -143,10 +143,10 @@ export default function SuggestMeeting({ members, columns, mode, hourFrom, hourT
   const disabled = members.length === 0 || suggestions.length === 0;
 
   return (
-    <div className="relative" ref={popRef}>
+    <div className={wrapperClassName || "relative"} ref={popRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="neo-btn pastel text-sm flex items-center gap-2"
+        className={triggerClassName || "neo-btn pastel text-sm flex items-center gap-2"}
         data-testid="suggest-meeting-btn"
         title="Suggest a meeting time"
       >

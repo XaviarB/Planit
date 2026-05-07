@@ -210,49 +210,80 @@ export default function GroupPage() {
 
   return (
     <div className="min-h-screen grain pb-24" data-testid="group-page">
-      {/* Unified top bar — group name + back button line up with the tabs and action buttons. */}
+      {/* Two-row topbar.
+          Row 1 — group identity on the left, the segmented view-tabs + theme toggle on the right.
+          Row 2 — the four big action buttons stretched edge-to-edge across the page width. */}
       <header
-        className="max-w-7xl mx-auto px-6 py-6 flex flex-wrap items-center gap-3"
+        className="max-w-7xl mx-auto px-6 pt-6 pb-3"
         data-testid="topbar"
       >
-        <button
-          className="w-10 h-10 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-mint)] shrink-0"
-          onClick={() => {
-            toast.dismiss();
-            nav("/");
-          }}
-          data-testid="back-home-btn"
-          aria-label="Back"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div className="shrink-0">
-          <div className="label-caps" style={{ color: "var(--ink-mute)" }}>Group</div>
-          <GroupMenu
-            group={group}
-            onRenamed={(name) => setGroup((g) => ({ ...g, name }))}
-          />
+        {/* Row 1 */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            className="w-10 h-10 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-mint)] shrink-0"
+            onClick={() => {
+              toast.dismiss();
+              nav("/");
+            }}
+            data-testid="back-home-btn"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="shrink-0">
+            <div className="label-caps" style={{ color: "var(--ink-mute)" }}>Group</div>
+            <GroupMenu
+              group={group}
+              onRenamed={(name) => setGroup((g) => ({ ...g, name }))}
+            />
+          </div>
+
+          {/* Spacer pushes the right cluster to the opposite edge. */}
+          <div className="flex-1 min-w-[16px]" />
+
+          {/* Right cluster — segmented view-tabs + (optional) Editing badge + theme toggle. */}
+          <div className="flex items-center gap-3" data-testid="view-tabs">
+            <div
+              className="inline-flex border-2 border-slate-900 rounded-full overflow-hidden"
+              style={{ boxShadow: "3px 3px 0 0 var(--ink)" }}
+            >
+              <button
+                onClick={() => { setTab("dates"); setEditMode(false); }}
+                data-testid="tab-dates"
+                className={`px-5 py-2.5 text-sm font-bold font-heading transition ${
+                  tab === "dates" && !editMode
+                    ? "bg-slate-900 text-white"
+                    : "bg-white hover:bg-[var(--pastel-mint)]"
+                }`}
+              >
+                Sync Our Orbits
+              </button>
+              <button
+                onClick={() => { setTab("members"); setEditMode(false); }}
+                data-testid="tab-members"
+                className={`px-5 py-2.5 text-sm font-bold font-heading transition border-l-2 border-slate-900 ${
+                  tab === "members"
+                    ? "bg-slate-900 text-white"
+                    : "bg-white hover:bg-[var(--pastel-mint)]"
+                }`}
+              >
+                Members' schedule
+              </button>
+            </div>
+            {editMode && (
+              <span
+                className="px-3 py-2 rounded-full border-2 border-slate-900 text-sm font-bold font-heading bg-slate-900 text-white"
+                data-testid="tab-editing"
+              >
+                Editing
+              </span>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
 
-        {/* Spacer pushes tabs + action buttons to the right of the group name. */}
-        <div className="flex-1 min-w-[16px]" />
-
-        {/* Tabs + action buttons inline with the group title. */}
-        <div className="flex items-center flex-wrap gap-2 ml-auto" data-testid="view-tabs">
-          <TabBtn active={tab === "dates" && !editMode} onClick={() => { setTab("dates"); setEditMode(false); }} testId="tab-dates">
-            Sync Our Orbits
-          </TabBtn>
-          <TabBtn active={tab === "members"} onClick={() => { setTab("members"); setEditMode(false); }} testId="tab-members">
-            Members' schedule
-          </TabBtn>
-          {editMode && (
-            <span
-              className="px-3 py-2 rounded-full border-2 border-slate-900 text-sm font-bold font-heading bg-slate-900 text-white"
-              data-testid="tab-editing"
-            >
-              Editing
-            </span>
-          )}
+        {/* Row 2 — action buttons stretched edge-to-edge, larger hit-target. */}
+        <div className="mt-4 flex items-stretch gap-4" data-testid="action-row">
           <SuggestMeeting
             members={visibleMembers}
             columns={columns}
@@ -262,10 +293,13 @@ export default function GroupPage() {
             minuteStep={60}
             groupName={group.name}
             groupCode={group.code}
+            wrapperClassName="relative flex-1"
+            triggerClassName="neo-btn pastel w-full justify-center flex items-center gap-2 text-base font-heading font-extrabold"
           />
           <button
             type="button"
-            className="astral-trigger text-sm"
+            className="astral-trigger flex-1 justify-center text-base"
+            style={{ padding: "14px 22px" }}
             onClick={() => {
               setAstralWindow("");
               setAstralOpen(true);
@@ -278,11 +312,12 @@ export default function GroupPage() {
           </button>
           <button
             type="button"
-            className="astral-trigger text-sm"
+            className="astral-trigger flex-1 justify-center text-base"
             onClick={() => setToolsOpen(true)}
             data-testid="open-tools-btn"
             title="My toolkit — natural-language busy entry, templates, calendar sync"
             style={{
+              padding: "14px 22px",
               background:
                 "linear-gradient(100deg, var(--pastel-mint) 0%, var(--pastel-lavender) 100%)",
             }}
@@ -291,14 +326,14 @@ export default function GroupPage() {
             My Toolkit
           </button>
           <button
-            className={`neo-btn text-sm ${editMode ? "" : "ghost"}`}
+            className={`neo-btn flex-1 justify-center text-base ${editMode ? "" : "ghost"}`}
+            style={{ padding: "14px 22px" }}
             onClick={onDoneEditing}
             disabled={savingExit}
             data-testid="toggle-edit-btn"
           >
             {editMode ? (savingExit ? "Saving..." : "Done editing") : "Edit my availability"}
           </button>
-          <ThemeToggle />
         </div>
       </header>
 
@@ -632,20 +667,6 @@ export default function GroupPage() {
         }}
       />
     </div>
-  );
-}
-
-function TabBtn({ active, children, onClick, testId }) {
-  return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      className={`px-4 py-2 rounded-full border-2 border-slate-900 text-sm font-bold font-heading transition ${
-        active ? "bg-slate-900 text-white" : "bg-white hover:bg-[var(--pastel-mint)]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 

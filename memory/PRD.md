@@ -212,3 +212,19 @@ Build a website that can group you and your friends schedules with time slots an
 - Members' schedule view shows the new chip bar
 - Share dropdown anchors left, vertical list scrolls inside `max-h-[420px]`
 - Sidebar cards animate in sequence on mount
+
+---
+
+## Iteration — 7 May 2026 · part 5 (spacing, logo wind-down, share z-index)
+
+### Changes
+- **Homepage spacing** tightened: hero `pt-10 pb-20` → `pt-6 pb-10`; closing section `pt-12 pb-32` → `pt-2 pb-24`; closing slogan margin `mt-20` → `mt-14`. "Built for spontaneous plans" + the feature cards now follow directly after the create/join row.
+- **Logo wind-down**: rewrote `PlanetIcon` to track `spinning` state in React. On mouse leave we set a `stopAfterIterRef` flag instead of stopping the animation; the SVG `<g.planet-globe>`'s `onAnimationIteration` handler reads that flag and removes the `is-spinning` class only at the end of a complete 4 s revolution → globe always returns to 0° seamlessly. Stars continue to twinkle while the wind-down cycle plays.
+  - CSS: removed the hover-only animation rule; added `.planet-globe.is-spinning { animation: globe-spin-y … }` and an extra selector to keep stars twinkling when the globe is winding down.
+- **Share dropdown stacking**: added `relative z-30` to the share-card. Now the entire share-card is its own stacking context above sibling sidebar cards (which compete with implicit `z-index: 0` when their `:hover` transform fires), so the dropdown reliably renders above the legend and members cards.
+
+### Verified
+- ESLint clean
+- Homepage screenshot shows hero immediately followed by the bottom section (no white desert between them)
+- Group page screenshot shows the share dropdown cleanly painted over everything below it
+- Logo: hover → spin starts; mouse leave mid-spin → globe completes its current revolution and stops at 0°

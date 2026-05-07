@@ -126,18 +126,20 @@ body {
 .ring-spin circle {
     fill: #0f172a;
 }
-/* Globe sits centered. The Y-axis rotation animation is OFF by default and
-   only kicks in while the user hovers the logo wrapper. */
+/* Globe sits centered. The Y-axis rotation is class-driven (.is-spinning) so
+   we can let the current 4s revolution complete cleanly even after mouse
+   leave — JavaScript flips the class on animationiteration. */
 .planet-globe {
     transform-origin: 16px 16px;
     transform-box: view-box;
     transform-style: preserve-3d;
     backface-visibility: visible;
 }
-.planet-logo-wrap:hover .planet-globe {
+.planet-globe.is-spinning {
     animation: globe-spin-y 4s linear infinite;
 }
-/* Stars: dim & still by default, twinkle only when the logo is hovered. */
+/* Stars: dim & still by default. They twinkle while the globe is spinning
+   (so the wind-down cycle keeps them alive) and also on direct hover. */
 .planet-stars circle {
     transform-origin: center;
     transform-box: fill-box;
@@ -145,7 +147,9 @@ body {
     fill: #f1c40f;
     transition: opacity 0.25s ease;
 }
-.planet-logo-wrap:hover .planet-stars circle {
+.planet-logo-wrap:hover .planet-stars circle,
+.planet-globe.is-spinning ~ .planet-stars circle,
+svg:has(.planet-globe.is-spinning) .planet-stars circle {
     animation: star-twinkle 2s ease-in-out infinite;
 }
 

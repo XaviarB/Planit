@@ -297,7 +297,7 @@ export default function GroupPage() {
             />
           </div>
 
-          <div className="neo-card p-4 pop-in" style={{ animationDelay: "80ms" }} data-testid="share-card">
+          <div className="neo-card p-4 pop-in relative z-30" style={{ animationDelay: "80ms" }} data-testid="share-card">
             <div className="label-caps mb-3 flex items-center gap-2">
               <Share2 className="w-4 h-4" /> Invite friends
             </div>

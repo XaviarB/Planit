@@ -135,7 +135,7 @@ export default function Landing() {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-10 pb-20 grid lg:grid-cols-12 gap-8 items-start">
+      <section className="max-w-6xl mx-auto px-6 pt-6 pb-10 grid lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-7 pop-in">
           <div
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--pastel-yellow)] border-2 border-slate-900 mb-6"
@@ -266,9 +266,9 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Closing CTA — bigger spacing, slogan as the punchline. */}
-      <section id="how" className="max-w-6xl mx-auto px-6 pt-12 pb-32">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14">
+      {/* Closing CTA — tightened spacing so it follows directly after the hero. */}
+      <section id="how" className="max-w-6xl mx-auto px-6 pt-2 pb-24">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
           <div className="max-w-xl">
             <div className="label-caps text-slate-500 mb-3">
               Built for spontaneous plans
@@ -324,7 +324,7 @@ export default function Landing() {
 
         {/* Closing slogan kicker — gives the page a memorable last beat. */}
         <div
-          className="mt-20 sm:mt-24 flex flex-col items-center text-center gap-4"
+          className="mt-14 sm:mt-16 flex flex-col items-center text-center gap-4"
           data-testid="closing-slogan"
         >
           <span className="label-caps text-slate-500 inline-flex items-center gap-2">
@@ -349,9 +349,32 @@ export default function Landing() {
   );
 }
 
-// --- Planet logo: ring is static, globe spins around its Y axis ON HOVER,
-//     stars are tucked close to the globe and only twinkle on hover ---
+// --- Planet logo: ring is static, globe rotates around its Y axis on hover.
+//     The animation always finishes its current 4s revolution before stopping,
+//     so the globe lands back at 0° even if the mouse leaves mid-spin.
+//     Stars stay close to the globe and only twinkle while hovered. ---
 function PlanetIcon() {
+  const [spinning, setSpinning] = useState(false);
+  // Ref instead of state — we don't want to re-render on every hover toggle,
+  // and the animationiteration handler reads the latest value either way.
+  const stopAfterIterRef = useRef(false);
+
+  const onEnter = () => {
+    stopAfterIterRef.current = false;
+    setSpinning(true);
+  };
+  const onLeave = () => {
+    // Don't stop immediately — wait for the current revolution to complete so
+    // the globe returns seamlessly to its starting orientation.
+    stopAfterIterRef.current = true;
+  };
+  const onAnimIter = () => {
+    if (stopAfterIterRef.current) {
+      stopAfterIterRef.current = false;
+      setSpinning(false);
+    }
+  };
+
   // 24 dots evenly distributed on a circle (then tilted via CSS rotateX into an ellipse).
   // The ring no longer spins — it sits as a static halo around the globe.
   const RING_DOT_COUNT = 24;
@@ -389,6 +412,8 @@ function PlanetIcon() {
       className="w-12 h-12 sm:w-14 sm:h-14"
       fill="none"
       aria-hidden="true"
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
     >
       <defs>
         <radialGradient id="planet-shade" cx="35%" cy="32%" r="70%">
@@ -415,8 +440,13 @@ function PlanetIcon() {
         ))}
       </g>
 
-      {/* Static globe (sphere body + meridians + highlight — no animation) */}
-      <g className="planet-globe">
+      {/* Static globe body. The optional `is-spinning` class drives the
+          rotateY animation; we listen for animationiteration so we can stop
+          on a clean cycle boundary (i.e., the globe lands back at 0°). */}
+      <g
+        className={`planet-globe${spinning ? " is-spinning" : ""}`}
+        onAnimationIteration={onAnimIter}
+      >
         <circle
           cx="16"
           cy="16"

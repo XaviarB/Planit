@@ -62,6 +62,79 @@ export const astralDraftInvite = (code, suggestion, window_blurb) =>
     .post(`/groups/${code}/astral/draft-invite`, { suggestion, window_blurb })
     .then((r) => r.data);
 
+// ---------- Calendar sync (iCal URL or raw .ics) ----------
+
+export const previewIcs = (code, payload) =>
+  api.post(`/groups/${code}/astral/preview-ics`, payload).then((r) => r.data);
+
+export const listCalendars = (code, member_id) =>
+  api
+    .get(`/groups/${code}/members/${member_id}/calendars`)
+    .then((r) => r.data);
+
+export const addCalendar = (code, member_id, payload) =>
+  api
+    .post(`/groups/${code}/members/${member_id}/calendars`, payload)
+    .then((r) => r.data);
+
+export const syncCalendar = (code, member_id, cal_id) =>
+  api
+    .post(`/groups/${code}/members/${member_id}/calendars/${cal_id}/sync`)
+    .then((r) => r.data);
+
+export const deleteCalendar = (code, member_id, cal_id) =>
+  api
+    .delete(`/groups/${code}/members/${member_id}/calendars/${cal_id}`)
+    .then((r) => r.data);
+
+// Build the public .ics feed URL for a member — paste into Google/Apple/Outlook.
+export const memberFeedUrl = (code, member_id) =>
+  `${API}/groups/${code}/members/${member_id}/feed.ics`;
+
+// ---------- Life Templates ----------
+
+export const listTemplates = (code, member_id) =>
+  api
+    .get(`/groups/${code}/members/${member_id}/templates`)
+    .then((r) => r.data);
+
+export const createTemplate = (code, member_id, payload) =>
+  api
+    .post(`/groups/${code}/members/${member_id}/templates`, payload)
+    .then((r) => r.data);
+
+export const deleteTemplate = (code, member_id, tpl_id) =>
+  api
+    .delete(`/groups/${code}/members/${member_id}/templates/${tpl_id}`)
+    .then((r) => r.data);
+
+export const applyTemplate = (code, member_id, tpl_id, payload) =>
+  api
+    .post(
+      `/groups/${code}/members/${member_id}/templates/${tpl_id}/apply`,
+      payload
+    )
+    .then((r) => r.data);
+
+// ---------- Hangouts (Phase 4 commitment ladder) ----------
+
+export const listHangouts = (code) =>
+  api.get(`/groups/${code}/hangouts`).then((r) => r.data);
+
+export const createHangout = (code, payload) =>
+  api.post(`/groups/${code}/hangouts`, payload).then((r) => r.data);
+
+export const updateHangout = (code, hid, payload) =>
+  api.put(`/groups/${code}/hangouts/${hid}`, payload).then((r) => r.data);
+
+export const rsvpHangout = (code, hid, member_id, status) =>
+  api
+    .put(`/groups/${code}/hangouts/${hid}/rsvp/${member_id}`, { status })
+    .then((r) => r.data);
+
+export const deleteHangout = (code, hid) =>
+  api.delete(`/groups/${code}/hangouts/${hid}`).then((r) => r.data);
+
 // ---------- LocalStorage helpers (Planit-branded) ----------
 //
 // Keys were originally prefixed `tt:` (TimeTogether). When the app rebranded

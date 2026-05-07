@@ -22,7 +22,9 @@ import SuggestMeeting from "../components/SuggestMeeting";
 import MembersSchedule from "../components/MembersSchedule";
 import ShareMenu from "../components/ShareMenu";
 import AstralDrawer from "../components/AstralDrawer";
-import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import MyToolsDrawer from "../components/MyToolsDrawer";
+import { HangoutsList } from "../components/Hangouts";
+import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Sparkles, Wand2 } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function GroupPage() {
@@ -53,6 +55,8 @@ export default function GroupPage() {
   // Astral concierge drawer
   const [astralOpen, setAstralOpen] = useState(false);
   const [astralWindow, setAstralWindow] = useState("");
+  // Schedule toolkit drawer (NL parser, templates, calendars)
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   // Persist view state changes to localStorage.
   useEffect(() => {
@@ -273,6 +277,20 @@ export default function GroupPage() {
             Ask Astral
           </button>
           <button
+            type="button"
+            className="astral-trigger text-sm"
+            onClick={() => setToolsOpen(true)}
+            data-testid="open-tools-btn"
+            title="My toolkit — natural-language busy entry, templates, calendar sync"
+            style={{
+              background:
+                "linear-gradient(100deg, var(--pastel-mint) 0%, var(--pastel-lavender) 100%)",
+            }}
+          >
+            <Wand2 className="astral-spark" strokeWidth={2.5} />
+            My Toolkit
+          </button>
+          <button
             className={`neo-btn text-sm ${editMode ? "" : "ghost"}`}
             onClick={onDoneEditing}
             disabled={savingExit}
@@ -297,6 +315,18 @@ export default function GroupPage() {
               hourTo={23}
               minuteStep={60}
               meId={memberId}
+            />
+          </div>
+
+          {/* Phase 4 — locked / tentative hangouts. Quietly hides itself when
+              the group has nothing on the calendar. */}
+          <div className="pop-in" style={{ animationDelay: "60ms" }}>
+            <HangoutsList
+              group={group}
+              memberId={memberId}
+              onChanged={(h) =>
+                setGroup((prev) => (prev ? { ...prev, hangouts: h } : prev))
+              }
             />
           </div>
 
@@ -388,7 +418,13 @@ export default function GroupPage() {
             />
           )}
 
-          {/* Sync Our Orbits — week-snapshot navigator with prev/next arrows. */}
+          {/* Sync Our Orbits — week-snapshot navigator with prev/next arrows.
+              Layout (post-cleanup): label on the left, navigator + inline
+              "This week" reset button on the right. The standalone
+              weeks-ahead counter is gone — the date range itself is enough
+              context. The reset button is rendered with visibility:hidden
+              when offset === 0 so the layout doesn't reflow as users
+              click around. */}
           {tab === "dates" && !editMode && (
             <div
               className="neo-card p-4 sm:p-5 flex flex-wrap items-center justify-center sm:justify-between gap-4"
@@ -418,33 +454,7 @@ export default function GroupPage() {
                 </span>
                 <button
                   type="button"
-                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
-                  onClick={() => setWeekOffset((o) => o + 1)}
-                  data-testid="week-next-btn"
-                  aria-label="Next week"
-                  title="Next week"
-                >
-                  <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0 w-[230px] justify-end">
-                <span
-                  className="text-sm font-bold uppercase tracking-wider w-[120px] text-right whitespace-nowrap"
-                  style={{ color: "var(--ink-soft)" }}
-                  data-testid="week-offset-label"
-                >
-                  {weekOffset === 0
-                    ? "This week"
-                    : weekOffset < 0
-                    ? `${-weekOffset} week${weekOffset === -1 ? "" : "s"} ago`
-                    : `${weekOffset} week${weekOffset === 1 ? "" : "s"} ahead`}
-                </span>
-                {/* Always rendered so the layout never reflows when navigating
-                    weeks; just hidden visually when the user is on this week. */}
-                <button
-                  type="button"
-                  className="neo-btn ghost text-sm whitespace-nowrap"
+                  className="neo-btn ghost text-sm whitespace-nowrap shrink-0"
                   onClick={() => setWeekOffset(0)}
                   data-testid="week-reset-btn"
                   aria-hidden={weekOffset === 0}
@@ -452,8 +462,19 @@ export default function GroupPage() {
                   style={{
                     visibility: weekOffset === 0 ? "hidden" : "visible",
                   }}
+                  title="Jump back to this week"
                 >
                   This week
+                </button>
+                <button
+                  type="button"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  onClick={() => setWeekOffset((o) => o + 1)}
+                  data-testid="week-next-btn"
+                  aria-label="Next week"
+                  title="Next week"
+                >
+                  <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
                 </button>
               </div>
             </div>
@@ -581,7 +602,34 @@ export default function GroupPage() {
         group={group}
         memberId={memberId}
         suggestedWindow={astralWindow}
-        onGroupUpdate={(g) => setGroup((prev) => ({ ...prev, ...g }))}
+        onGroupUpdate={(g) => {
+          setGroup((prev) => ({ ...prev, ...g }));
+          // If a hangout was just created, refresh the group to pick it up.
+          if (g?._hangoutsBumped) {
+            (async () => {
+              try {
+                const fresh = await getGroup(code);
+                setGroup(fresh);
+              } catch {}
+            })();
+          }
+        }}
+      />
+
+      {/* Schedule toolkit drawer (Astral NL parser, life templates, calendars) */}
+      <MyToolsDrawer
+        open={toolsOpen}
+        onClose={() => setToolsOpen(false)}
+        group={group}
+        memberId={memberId}
+        onMemberUpdate={async () => {
+          // Pull fresh group state after any merge — slots / templates /
+          // calendars may have changed server-side.
+          try {
+            const fresh = await getGroup(code);
+            setGroup(fresh);
+          } catch {}
+        }}
       />
     </div>
   );

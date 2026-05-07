@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Sparkles, X, Send, MapPin, Star, ExternalLink, MessageSquare,
-  Loader2, Compass, Quote, ChevronDown, Tag, AlertTriangle,
+  Loader2, Compass, Quote, ChevronDown, Tag, AlertTriangle, Lock,
 } from "lucide-react";
 import {
   astralSuggest,
@@ -11,6 +11,7 @@ import {
   updateMember,
 } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
+import { LockInModal } from "./Hangouts";
 
 /**
  * AstralDrawer
@@ -56,6 +57,9 @@ export default function AstralDrawer({
 
   const [drafting, setDrafting] = useState(null); // card.id while drafting
   const [drafts, setDrafts] = useState({}); // { cardId: messageString }
+
+  // Lock-in flow — Phase 4 commitment ladder.
+  const [lockInCard, setLockInCard] = useState(null);
 
   // Editable group base location.
   const [editingBaseLoc, setEditingBaseLoc] = useState(false);
@@ -403,6 +407,7 @@ export default function AstralDrawer({
                   drafting={drafting === card.id}
                   draft={drafts[card.id]}
                   onDraft={() => onDraft(card)}
+                  onLockIn={() => setLockInCard(card)}
                 />
               ))}
               {result.cards.length > 0 && (
@@ -415,6 +420,20 @@ export default function AstralDrawer({
           )}
         </div>
       </div>
+
+      {/* Lock-in modal — Phase 4 commitment ladder */}
+      <LockInModal
+        open={!!lockInCard}
+        onClose={() => setLockInCard(null)}
+        group={group}
+        memberId={memberId}
+        suggestion={lockInCard}
+        defaultWindow={windowBlurb}
+        onCreated={() => {
+          // Tell the parent a hangout was created so it can refresh.
+          onGroupUpdate?.({ ...group, _hangoutsBumped: Date.now() });
+        }}
+      />
     </div>
   );
 }
@@ -491,7 +510,7 @@ function LocationRow({
   );
 }
 
-function SuggestionCard({ card, idx, drafting, draft, onDraft }) {
+function SuggestionCard({ card, idx, drafting, draft, onDraft, onLockIn }) {
   const tone = card.buzz?.tone || "mixed";
   const toneColor = {
     love: "#22c55e",
@@ -608,7 +627,7 @@ function SuggestionCard({ card, idx, drafting, draft, onDraft }) {
       )}
 
       {/* Actions */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <a
           href={card.verify_links?.google_search}
           target="_blank"
@@ -629,7 +648,7 @@ function SuggestionCard({ card, idx, drafting, draft, onDraft }) {
         </a>
         <button
           type="button"
-          className="neo-btn text-[0.7rem] !py-2 !px-2 flex items-center justify-center gap-1"
+          className="neo-btn ghost text-[0.7rem] !py-2 !px-2 flex items-center justify-center gap-1"
           onClick={onDraft}
           disabled={drafting}
           data-testid={`astral-draft-btn-${idx}`}
@@ -640,6 +659,15 @@ function SuggestionCard({ card, idx, drafting, draft, onDraft }) {
             <MessageSquare className="w-3 h-3" />
           )}
           {drafting ? "drafting…" : draft ? "redraft" : "draft pitch"}
+        </button>
+        <button
+          type="button"
+          className="neo-btn text-[0.7rem] !py-2 !px-2 flex items-center justify-center gap-1"
+          onClick={onLockIn}
+          data-testid={`astral-lockin-${idx}`}
+        >
+          <Lock className="w-3 h-3" />
+          lock it in
         </button>
       </div>
     </article>

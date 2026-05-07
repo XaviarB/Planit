@@ -10,7 +10,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import httpx
 
 
 ROOT_DIR = Path(__file__).parent
@@ -23,6 +24,9 @@ db = client[os.environ['DB_NAME']]
 
 # Astral concierge — imported AFTER load_dotenv so the LLM key is visible.
 from astral import parse_busy_text, suggest_hangouts, draft_invite  # noqa: E402
+from calendar_sync import (  # noqa: E402
+    fetch_ics, parse_ics_to_slots, build_member_feed, merge_slot_lists,
+)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -56,6 +60,37 @@ class AvailabilitySlot(BaseModel):
     reason_id: Optional[str] = None
 
 
+class MemberCalendar(BaseModel):
+    """An external calendar subscription registered by a member.
+
+    `kind`:
+      - "url"   — we will periodically (or on demand) fetch `value` and merge
+                  the resulting busy slots.
+      - "raw"   — `value` is a one-time .ics blob the user uploaded; we parsed
+                  it once and persisted nothing more than the metadata. We
+                  keep the URL/blob OFF the wire on read endpoints.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    label: str = "External calendar"
+    kind: str = "url"            # "url" | "raw"
+    value: str = ""              # iCal URL (kind=url) or hash placeholder (raw)
+    last_synced_at: Optional[str] = None
+    last_event_count: int = 0
+    last_added: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class BusyTemplate(BaseModel):
+    """A reusable busy pattern, e.g. "work week" or "class schedule"."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = "Untitled template"
+    color: str = "#7FB3D5"
+    # Stored as weekly-mode slots so the template is week-agnostic. Apply
+    # paints them onto a target date range.
+    slots: List[AvailabilitySlot] = []
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class Member(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -65,7 +100,36 @@ class Member(BaseModel):
     # to the group's base location when absent. Astral uses this to better
     # tune suggestions to whoever's actually showing up.
     location: Optional[str] = None
+    # Calendar subscriptions and saved busy patterns. Always default-empty so
+    # older documents continue to load.
+    calendars: List[MemberCalendar] = []
+    templates: List[BusyTemplate] = []
     joined_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class HangoutRSVP(BaseModel):
+    member_id: str
+    status: str = "yes"   # "yes" | "maybe" | "no"
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class Hangout(BaseModel):
+    """A concrete planned hangout — the "commitment ladder" output. Created
+    when someone Locks-In an Astral suggestion (or manually). Drives the
+    per-member .ics feed."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str = "Planit hangout"
+    status: str = "tentative"   # "tentative" | "locked"
+    start_iso: str = ""         # full ISO datetime in UTC
+    end_iso: str = ""
+    location_name: Optional[str] = None
+    address: Optional[str] = None
+    astral_take: Optional[str] = None
+    invite_message: Optional[str] = None
+    suggestion_snapshot: Optional[Dict] = None  # raw Astral card for traceability
+    rsvps: List[HangoutRSVP] = []
+    created_by: Optional[str] = None  # member_id
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class Group(BaseModel):
@@ -77,6 +141,7 @@ class Group(BaseModel):
     location: Optional[str] = None
     members: List[Member] = []
     reasons: List[BusyReason] = []
+    hangouts: List[Hangout] = []
     heat_colors: List[str] = Field(default_factory=lambda: [
         "#1f0500",  # 0 free  — ember black (darkest)
         "#dc2626",  # 1 (a few) — deep neon red
@@ -142,6 +207,72 @@ class AstralSuggestReq(BaseModel):
 class AstralDraftInviteReq(BaseModel):
     suggestion: Dict
     window_blurb: str
+
+
+# ---------- Calendar / Template / Hangout request models ----------
+
+class AddCalendarReq(BaseModel):
+    label: Optional[str] = "External calendar"
+    kind: str = "url"            # "url" | "raw"
+    url: Optional[str] = None    # required when kind=url
+    ics_text: Optional[str] = None  # required when kind=raw
+
+
+class PreviewIcsReq(BaseModel):
+    """Parse-only preview — returns slots without persisting anything."""
+    kind: str = "url"
+    url: Optional[str] = None
+    ics_text: Optional[str] = None
+
+
+class MergeSlotsReq(BaseModel):
+    """Merge a list of incoming slots into a member's existing slot list."""
+    slots: List[AvailabilitySlot]
+
+
+class CreateTemplateReq(BaseModel):
+    name: str
+    color: Optional[str] = "#7FB3D5"
+    # Slots may be either weekly-mode (preferred) or date-mode (we'll fold into
+    # weekly day-of-week buckets so it can be re-applied later).
+    slots: List[AvailabilitySlot]
+
+
+class ApplyTemplateReq(BaseModel):
+    """Project a saved template's weekly slots onto N concrete weeks ahead.
+    `weeks_ahead` must be 1-12; `start_iso` is the Monday of week 0 — defaults
+    to the current week's Monday in UTC."""
+    weeks_ahead: int = 4
+    start_iso: Optional[str] = None
+    overwrite: bool = False  # if False we add busy slots; if True we overwrite same-key/hour
+
+
+class CreateHangoutReq(BaseModel):
+    title: Optional[str] = None
+    start_iso: str
+    end_iso: str
+    location_name: Optional[str] = None
+    address: Optional[str] = None
+    astral_take: Optional[str] = None
+    invite_message: Optional[str] = None
+    status: str = "tentative"  # "tentative" | "locked"
+    suggestion_snapshot: Optional[Dict] = None
+    created_by: Optional[str] = None
+
+
+class UpdateHangoutReq(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+    start_iso: Optional[str] = None
+    end_iso: Optional[str] = None
+    location_name: Optional[str] = None
+    address: Optional[str] = None
+    astral_take: Optional[str] = None
+    invite_message: Optional[str] = None
+
+
+class RsvpReq(BaseModel):
+    status: str  # "yes" | "maybe" | "no"
 
 
 # ---------- Helpers ----------
@@ -351,6 +482,390 @@ async def astral_draft_invite(code: str, req: AstralDraftInviteReq):
         window_blurb=req.window_blurb or "later",
     )
     return {"message": msg}
+
+
+# =============================================================================
+# Calendar sync — IN (external → planit busy) and OUT (planit → external feed)
+# =============================================================================
+
+def _member_or_404(g: dict, member_id: str) -> dict:
+    m = next((x for x in (g.get("members") or []) if x.get("id") == member_id), None)
+    if not m:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return m
+
+
+async def _ingest_ics(kind: str, url: Optional[str], ics_text: Optional[str]) -> List[Dict]:
+    """Resolve `url` or `ics_text` to a parsed list of busy slots. Raises 400."""
+    if kind == "url":
+        if not url:
+            raise HTTPException(status_code=400, detail="url required for kind=url")
+        try:
+            txt = await fetch_ics(url)
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=400, detail=f"could not fetch calendar: {e}")
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"bad calendar url: {e}")
+    elif kind == "raw":
+        if not ics_text:
+            raise HTTPException(status_code=400, detail="ics_text required for kind=raw")
+        txt = ics_text
+    else:
+        raise HTTPException(status_code=400, detail="kind must be 'url' or 'raw'")
+    return parse_ics_to_slots(txt)
+
+
+def _scrub_calendar(c: Dict) -> Dict:
+    """Mask the secret URL/blob before sending to the client."""
+    out = dict(c)
+    val = out.get("value", "") or ""
+    if val:
+        if val.startswith("http"):
+            # Show prefix + ellipsis; never the secret token at the end.
+            out["value_masked"] = val[:24] + ("…" if len(val) > 24 else "")
+        else:
+            out["value_masked"] = "(uploaded .ics)"
+    out.pop("value", None)
+    return out
+
+
+@api_router.post("/groups/{code}/astral/preview-ics")
+async def preview_ics(code: str, req: PreviewIcsReq):
+    """Pre-flight an iCal source and return the slots we'd merge — without
+    persisting anything. Used for the 'connect calendar' UX so users see what
+    they're about to import."""
+    await find_group(code)
+    slots = await _ingest_ics(req.kind, req.url, req.ics_text)
+    return {"count": len(slots), "slots": slots}
+
+
+@api_router.get("/groups/{code}/members/{member_id}/calendars")
+async def list_calendars(code: str, member_id: str):
+    g = await find_group(code)
+    m = _member_or_404(g, member_id)
+    return {"calendars": [_scrub_calendar(c) for c in (m.get("calendars") or [])]}
+
+
+@api_router.post("/groups/{code}/members/{member_id}/calendars")
+async def add_calendar(code: str, member_id: str, req: AddCalendarReq):
+    """Attach a calendar to a member AND immediately sync it. Returns the new
+    calendar (with masked secret) plus the list of slots that were merged."""
+    g = await find_group(code)
+    _member_or_404(g, member_id)
+
+    slots = await _ingest_ics(req.kind, req.url, req.ics_text)
+    cal = MemberCalendar(
+        label=(req.label or "External calendar").strip() or "External calendar",
+        kind=req.kind,
+        value=(req.url or "").strip() if req.kind == "url" else "raw://uploaded",
+        last_synced_at=datetime.now(timezone.utc).isoformat(),
+        last_event_count=len(slots),
+        last_added=0,
+    )
+
+    # Merge slots into member's existing schedule.
+    m = next(x for x in g["members"] if x["id"] == member_id)
+    merged, added = merge_slot_lists(m.get("slots") or [], slots)
+    cal.last_added = added
+
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {
+            "$set": {"members.$.slots": merged},
+            "$push": {"members.$.calendars": cal.model_dump()},
+        },
+    )
+    return {"calendar": _scrub_calendar(cal.model_dump()), "added": added, "total_events": len(slots)}
+
+
+@api_router.post("/groups/{code}/members/{member_id}/calendars/{cal_id}/sync")
+async def sync_calendar(code: str, member_id: str, cal_id: str):
+    g = await find_group(code)
+    m = _member_or_404(g, member_id)
+    cal = next((c for c in (m.get("calendars") or []) if c.get("id") == cal_id), None)
+    if not cal:
+        raise HTTPException(status_code=404, detail="calendar not found")
+    if cal.get("kind") != "url":
+        raise HTTPException(status_code=400, detail="raw .ics uploads cannot be re-synced")
+
+    slots = await _ingest_ics("url", cal.get("value"), None)
+    merged, added = merge_slot_lists(m.get("slots") or [], slots)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {"$set": {"members.$.slots": merged}},
+    )
+    # Update calendar metadata. We use a 2-step update because Mongo doesn't
+    # support nested-array $set in one go without arrayFilters.
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {
+            "$set": {
+                "members.$[m].calendars.$[c].last_synced_at": now_iso,
+                "members.$[m].calendars.$[c].last_event_count": len(slots),
+                "members.$[m].calendars.$[c].last_added": added,
+            }
+        },
+        array_filters=[{"m.id": member_id}, {"c.id": cal_id}],
+    )
+    return {"added": added, "total_events": len(slots), "last_synced_at": now_iso}
+
+
+@api_router.delete("/groups/{code}/members/{member_id}/calendars/{cal_id}")
+async def delete_calendar(code: str, member_id: str, cal_id: str):
+    g = await find_group(code)
+    _member_or_404(g, member_id)
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {"$pull": {"members.$.calendars": {"id": cal_id}}},
+    )
+    return {"ok": True}
+
+
+# ----- OUT: per-member iCal feed -----
+
+@api_router.get("/groups/{code}/members/{member_id}/feed.ics")
+async def member_feed(code: str, member_id: str):
+    """Public subscribable iCal feed of every locked/tentative hangout the
+    member hasn't declined. Subscribe via Google/Apple/Outlook to auto-mirror
+    Planit hangouts into your calendar app — no OAuth needed."""
+    from fastapi.responses import Response
+
+    g = await find_group(code)
+    _member_or_404(g, member_id)
+    body = build_member_feed(
+        feed_uid_prefix=f"{code.upper()}-{member_id[:8]}",
+        feed_name=f"Planit · {g.get('name', 'Group')}",
+        hangouts=[{**h, "group_code": code.upper()} for h in (g.get("hangouts") or [])],
+        member_id=member_id,
+    )
+    return Response(
+        content=body,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'inline; filename="planit-{code.upper()}.ics"'},
+    )
+
+
+# =============================================================================
+# Templates — save & re-apply busy patterns
+# =============================================================================
+
+def _normalize_template_slots(slots: List[Dict]) -> List[Dict]:
+    """Templates are weekly-mode by definition. Fold any date-mode slots into
+    weekly via day-of-week. Drops `key` for date inputs."""
+    out: List[Dict] = []
+    seen = set()
+    for s in slots:
+        try:
+            mode = s.get("mode") or "weekly"
+            if mode == "weekly":
+                key = s.get("key", "d0")
+            else:
+                # Convert ISO date → "d{0..6}" (Monday=0, Sunday=6)
+                d = datetime.fromisoformat(s["key"]).date()
+                key = f"d{d.weekday()}"
+            sig = (key, int(s.get("hour", 0)), int(s.get("minute", 0)))
+            if sig in seen:
+                continue
+            seen.add(sig)
+            out.append({
+                "mode": "weekly",
+                "key": key,
+                "hour": int(s.get("hour", 0)),
+                "minute": int(s.get("minute", 0)),
+                "step": int(s.get("step", 60)),
+                "status": "busy",
+                "reason_id": s.get("reason_id"),
+            })
+        except Exception:
+            continue
+    return out
+
+
+@api_router.get("/groups/{code}/members/{member_id}/templates")
+async def list_templates(code: str, member_id: str):
+    g = await find_group(code)
+    m = _member_or_404(g, member_id)
+    return {"templates": m.get("templates") or []}
+
+
+@api_router.post("/groups/{code}/members/{member_id}/templates")
+async def create_template(code: str, member_id: str, req: CreateTemplateReq):
+    g = await find_group(code)
+    _member_or_404(g, member_id)
+    template = BusyTemplate(
+        name=(req.name or "Template").strip() or "Template",
+        color=req.color or "#7FB3D5",
+        slots=[AvailabilitySlot(**s) for s in _normalize_template_slots([s.model_dump() for s in req.slots])],
+    )
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {"$push": {"members.$.templates": template.model_dump()}},
+    )
+    return template.model_dump()
+
+
+@api_router.delete("/groups/{code}/members/{member_id}/templates/{tpl_id}")
+async def delete_template(code: str, member_id: str, tpl_id: str):
+    g = await find_group(code)
+    _member_or_404(g, member_id)
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {"$pull": {"members.$.templates": {"id": tpl_id}}},
+    )
+    return {"ok": True}
+
+
+@api_router.post("/groups/{code}/members/{member_id}/templates/{tpl_id}/apply")
+async def apply_template(code: str, member_id: str, tpl_id: str, req: ApplyTemplateReq):
+    g = await find_group(code)
+    m = _member_or_404(g, member_id)
+    tpl = next((t for t in (m.get("templates") or []) if t.get("id") == tpl_id), None)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="template not found")
+
+    weeks = max(1, min(int(req.weeks_ahead or 1), 12))
+    if req.start_iso:
+        try:
+            base = datetime.fromisoformat(req.start_iso[:10]).date()
+        except Exception:
+            base = datetime.now(timezone.utc).date()
+    else:
+        base = datetime.now(timezone.utc).date()
+    # Round to that week's Monday.
+    base = base - timedelta(days=base.weekday())
+
+    incoming: List[Dict] = []
+    for week in range(weeks):
+        week_start = base + timedelta(days=7 * week)
+        for s in (tpl.get("slots") or []):
+            try:
+                d_idx = int(str(s.get("key", "d0")).lstrip("d"))
+            except Exception:
+                d_idx = 0
+            target = week_start + timedelta(days=d_idx)
+            incoming.append({
+                "mode": "date",
+                "key": target.isoformat(),
+                "hour": int(s.get("hour", 0)),
+                "minute": int(s.get("minute", 0)),
+                "step": int(s.get("step", 60)),
+                "status": "busy",
+                "reason_id": s.get("reason_id"),
+            })
+
+    existing = m.get("slots") or []
+    if req.overwrite:
+        merged, added = merge_slot_lists(existing, incoming)
+    else:
+        # Skip slots that already have a busy entry — additive only.
+        existing_keys = {(s.get("mode"), s.get("key"), s.get("hour"), s.get("minute")) for s in existing}
+        non_clash = [s for s in incoming if (s["mode"], s["key"], s["hour"], s["minute"]) not in existing_keys]
+        merged = existing + non_clash
+        added = len(non_clash)
+
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {"$set": {"members.$.slots": merged}},
+    )
+    return {"added": added, "weeks": weeks, "total_painted": len(incoming)}
+
+
+# =============================================================================
+# Hangouts — Phase 4 commitment ladder
+# =============================================================================
+
+@api_router.get("/groups/{code}/hangouts")
+async def list_hangouts(code: str):
+    g = await find_group(code)
+    return {"hangouts": g.get("hangouts") or []}
+
+
+@api_router.post("/groups/{code}/hangouts")
+async def create_hangout(code: str, req: CreateHangoutReq):
+    await find_group(code)
+    h = Hangout(
+        title=(req.title or "Planit hangout").strip() or "Planit hangout",
+        status=("locked" if (req.status or "").lower() == "locked" else "tentative"),
+        start_iso=req.start_iso,
+        end_iso=req.end_iso,
+        location_name=req.location_name,
+        address=req.address,
+        astral_take=req.astral_take,
+        invite_message=req.invite_message,
+        suggestion_snapshot=req.suggestion_snapshot,
+        created_by=req.created_by,
+        rsvps=[],
+    )
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {"$push": {"hangouts": h.model_dump()}},
+    )
+    return h.model_dump()
+
+
+@api_router.put("/groups/{code}/hangouts/{hid}")
+async def update_hangout(code: str, hid: str, req: UpdateHangoutReq):
+    await find_group(code)
+    set_doc: Dict = {}
+    for f in (
+        "title", "status", "start_iso", "end_iso",
+        "location_name", "address", "astral_take", "invite_message",
+    ):
+        v = getattr(req, f)
+        if v is not None:
+            set_doc[f"hangouts.$.{f}"] = v
+    if not set_doc:
+        return {"ok": True}
+    await db.groups.update_one(
+        {"code": code.upper(), "hangouts.id": hid},
+        {"$set": set_doc},
+    )
+    return {"ok": True}
+
+
+@api_router.put("/groups/{code}/hangouts/{hid}/rsvp/{member_id}")
+async def rsvp_hangout(code: str, hid: str, member_id: str, req: RsvpReq):
+    g = await find_group(code)
+    _member_or_404(g, member_id)
+    status = (req.status or "").lower()
+    if status not in ("yes", "maybe", "no"):
+        raise HTTPException(status_code=400, detail="status must be yes|maybe|no")
+
+    # Try to update an existing RSVP first; if none, push a new one.
+    res = await db.groups.update_one(
+        {"code": code.upper(), "hangouts.id": hid, "hangouts.rsvps.member_id": member_id},
+        {
+            "$set": {
+                "hangouts.$[h].rsvps.$[r].status": status,
+                "hangouts.$[h].rsvps.$[r].updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        array_filters=[{"h.id": hid}, {"r.member_id": member_id}],
+    )
+    if res.matched_count == 0:
+        new = HangoutRSVP(member_id=member_id, status=status).model_dump()
+        await db.groups.update_one(
+            {"code": code.upper(), "hangouts.id": hid},
+            {"$push": {"hangouts.$.rsvps": new}},
+        )
+    return {"ok": True, "status": status}
+
+
+@api_router.delete("/groups/{code}/hangouts/{hid}")
+async def delete_hangout(code: str, hid: str):
+    await find_group(code)
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {"$pull": {"hangouts": {"id": hid}}},
+    )
+    return {"ok": True}
+
+
+# =============================================================================
+# Misc reasons (existing)
+# =============================================================================
 
 
 @api_router.post("/groups/{code}/reasons")

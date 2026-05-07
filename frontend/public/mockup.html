@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Planit · Topbar redesign mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-base:#fafaf7; --card:#fff; --ink:#0f172a; --ink-soft:#334155; --ink-mute:#64748b;
+    --pastel-mint:#d1f2eb; --pastel-yellow:#fef9e7; --pastel-lavender:#f4ecf7; --pastel-peach:#fde2d3;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg-base);color:var(--ink);font-family:"Work Sans",system-ui,sans-serif}
+  .label-caps{font-family:"Outfit",sans-serif;text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:700;color:var(--ink-mute)}
+  .font-heading{font-family:"Outfit",sans-serif;font-weight:800}
+  .page{max-width:1640px;margin:0 auto;padding:24px 32px}
+
+  /* round icon button (back, theme) */
+  .icon-btn{width:44px;height:44px;border-radius:9999px;border:2px solid var(--ink);background:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:3px 3px 0 0 var(--ink);transition:transform .12s,box-shadow .12s}
+  .icon-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 0 var(--ink)}
+  .icon-btn.lg{width:52px;height:52px}
+
+  /* group title block */
+  .group-title{display:flex;align-items:center;gap:10px;font-family:"Outfit",sans-serif;font-weight:900;font-size:30px;line-height:1}
+  .group-title .chev{width:22px;height:22px;color:var(--ink-mute)}
+
+  /* pill / tab buttons */
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:14px 22px;border:2px solid var(--ink);border-radius:9999px;
+    background:#fff;color:var(--ink);
+    font-family:"Outfit",sans-serif;font-weight:700;font-size:15px;
+    box-shadow:3px 3px 0 0 var(--ink);cursor:pointer;
+    transition:transform .12s,box-shadow .12s;
+    white-space:nowrap;
+  }
+  .pill:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 0 var(--ink)}
+  .pill.active{background:var(--ink);color:#fff}
+  .pill.mint{background:var(--pastel-mint)}
+  .pill.peach{background:var(--pastel-peach)}
+  .pill.lav{background:var(--pastel-lavender)}
+  .pill.yellow{background:var(--pastel-yellow)}
+  .pill .dot{width:10px;height:10px;border-radius:9999px;background:var(--ink)}
+
+  /* layout rows */
+  .row1{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .row1 .left{display:flex;align-items:center;gap:14px}
+  .row1 .left .meta{display:flex;flex-direction:column;gap:2px}
+  .row2{
+    margin-top:18px;
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    width:100%;
+  }
+
+  /* section wrapper card */
+  .mockup-card{
+    border:2px dashed #cbd5e1;border-radius:24px;padding:26px 28px;background:#fff;
+  }
+  .stage-label{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:6px 12px;border-radius:9999px;border:2px solid var(--ink);background:var(--pastel-yellow);
+    font-family:"Outfit",sans-serif;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    margin-bottom:14px;
+  }
+
+  .preview-note{
+    color:var(--ink-mute);font-size:13px;margin-top:8px;font-family:"Outfit",sans-serif;
+  }
+
+  /* fake content placeholder under header */
+  .fake-content{
+    margin-top:22px;display:grid;grid-template-columns:300px 1fr;gap:20px;
+  }
+  .placeholder{border:2px dashed #cbd5e1;border-radius:18px;height:340px;background:repeating-linear-gradient(45deg,#fafafa,#fafafa 10px,#f1f5f9 10px,#f1f5f9 20px)}
+  .placeholder.tall{height:480px}
+
+  .arrow-svg{width:18px;height:18px}
+  .sparkle{display:inline-block;width:14px;height:14px;background:currentColor;clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);}
+
+  h2.section{font-family:"Outfit",sans-serif;font-weight:900;font-size:22px;margin:36px 0 12px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ============================================================= -->
+  <!-- BEFORE -->
+  <!-- ============================================================= -->
+  <h2 class="section">Before — current</h2>
+  <div class="mockup-card">
+    <span class="stage-label" style="background:#fee2e2;border-color:#dc2626;color:#7f1d1d">Now</span>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button class="icon-btn"><svg class="arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+      <div class="meta">
+        <div class="label-caps">Group</div>
+        <div class="group-title">Weekend Warriors <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div>
+      </div>
+      <div style="flex:1"></div>
+      <button class="pill active">Sync Our Orbits</button>
+      <button class="pill">Members' schedule</button>
+      <button class="pill mint"><span class="sparkle"></span>Suggest a time</button>
+      <button class="pill lav"><span class="sparkle"></span>Ask Astral</button>
+      <button class="pill mint"><span class="sparkle"></span>My Toolkit</button>
+      <button class="pill">Edit my availability</button>
+      <button class="icon-btn">🌙</button>
+    </div>
+    <div class="preview-note">Everything crammed in one wrapping row · group name on the left · moon at the far end of the buttons</div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- AFTER · OPTION A -->
+  <!-- ============================================================= -->
+  <h2 class="section">After · Option A — clean two-row split</h2>
+  <div class="mockup-card">
+    <span class="stage-label">Proposed</span>
+
+    <!-- Row 1: title left ↔ theme right -->
+    <div class="row1">
+      <div class="left">
+        <button class="icon-btn lg"><svg class="arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+        <div class="meta">
+          <div class="label-caps">Group</div>
+          <div class="group-title" style="font-size:34px">Weekend Warriors <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div>
+        </div>
+      </div>
+      <button class="icon-btn lg" title="Toggle theme">🌙</button>
+    </div>
+
+    <!-- Row 2: action buttons spread evenly across full width -->
+    <div class="row2">
+      <button class="pill active" style="padding:16px 26px;font-size:16px">Sync Our Orbits</button>
+      <button class="pill" style="padding:16px 26px;font-size:16px">Members' schedule</button>
+      <button class="pill mint" style="padding:16px 26px;font-size:16px"><span class="sparkle"></span>Suggest a time</button>
+      <button class="pill lav" style="padding:16px 26px;font-size:16px"><span class="sparkle"></span>Ask Astral</button>
+      <button class="pill mint" style="padding:16px 26px;font-size:16px"><span class="sparkle"></span>My Toolkit</button>
+      <button class="pill" style="padding:16px 26px;font-size:16px">Edit my availability</button>
+    </div>
+
+    <div class="preview-note">Row 1 · group title on the left, theme toggle mirrored on the right · Row 2 · all six buttons centered &amp; spaced edge-to-edge with <code>justify-content:space-between</code>, +20% taller for a more solid hit-target.</div>
+
+    <div class="fake-content">
+      <div class="placeholder"></div>
+      <div class="placeholder tall"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- AFTER · OPTION B -->
+  <!-- ============================================================= -->
+  <h2 class="section">After · Option B — tabs split out, action buttons centered</h2>
+  <div class="mockup-card">
+    <span class="stage-label">Alternative</span>
+
+    <!-- Row 1: title left ↔ view tabs right -->
+    <div class="row1">
+      <div class="left">
+        <button class="icon-btn lg"><svg class="arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+        <div class="meta">
+          <div class="label-caps">Group</div>
+          <div class="group-title" style="font-size:34px">Weekend Warriors <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:inline-flex;border:2px solid var(--ink);border-radius:9999px;overflow:hidden;box-shadow:3px 3px 0 0 var(--ink)">
+          <button class="pill active" style="border:0;border-radius:0;box-shadow:none;padding:14px 22px">Sync Our Orbits</button>
+          <button class="pill" style="border:0;border-left:2px solid var(--ink);border-radius:0;box-shadow:none;padding:14px 22px">Members' schedule</button>
+        </div>
+        <button class="icon-btn lg" title="Toggle theme">🌙</button>
+      </div>
+    </div>
+
+    <!-- Row 2: only the four action buttons, centered, spread -->
+    <div class="row2" style="justify-content:center;gap:24px">
+      <button class="pill mint" style="padding:16px 28px;font-size:16px"><span class="sparkle"></span>Suggest a time</button>
+      <button class="pill lav" style="padding:16px 28px;font-size:16px"><span class="sparkle"></span>Ask Astral</button>
+      <button class="pill mint" style="padding:16px 28px;font-size:16px"><span class="sparkle"></span>My Toolkit</button>
+      <button class="pill" style="padding:16px 28px;font-size:16px">Edit my availability</button>
+    </div>
+
+    <div class="preview-note">Row 1 · group title left · view-tabs (Sync Our Orbits / Members' schedule) become a paired segmented control on the right next to the theme toggle. Row 2 · only the 4 action buttons live here — same enlarged size, centered.</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -182,9 +182,9 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
           title="Drag to move · tap for Astral"
         >
           {hubOpen ? (
-            <X className="w-5 h-5" strokeWidth={2.5} />
+            <X className="w-5 h-5" strokeWidth={2.5} style={{ pointerEvents: "none" }} />
           ) : (
-            <Sparkles className="w-5 h-5 astral-spark" strokeWidth={2.5} />
+            <Sparkles className="w-5 h-5 astral-spark" strokeWidth={2.5} style={{ pointerEvents: "none" }} />
           )}
         </button>
       </div>

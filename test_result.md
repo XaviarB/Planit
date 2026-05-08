@@ -337,7 +337,7 @@ backend:
 frontend:
   - task: "Floating Astral + Toolkit launcher (draggable FAB)"
     implemented: true
-    working: false
+    working: true
     file: "frontend/src/components/FloatingLauncher.jsx, frontend/src/pages/Group.jsx"
     stuck_count: 2
     priority: "high"
@@ -486,6 +486,41 @@ frontend:
           because subsequent drag attempts fail (SVG blocks pointer events). This makes the
           feature partially broken - users can position the orb once but then lose the ability
           to reposition it if it ends up at the top wall.
+      - working: true
+        agent: "main"
+        comment: |
+          Applied the pointer-events fix: added `style={{ pointerEvents: 'none' }}` to both
+          SVG icons (Sparkles and X) in FloatingLauncher.jsx lines 185 and 187. This allows
+          pointer events to pass through the SVG children to the button element, fixing the
+          issue where the SVG was intercepting pointer events and preventing drag initiation.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ BUG FIXED - All drag-snap scenarios now working perfectly!
+          
+          COMPREHENSIVE 6-STEP REGRESSION TEST RESULTS:
+          ✅ Step 1: Initial position read - orb at RIGHT wall (1876, 594)
+          ✅ Step 2: Drag to middle (960, 400) → correctly snapped to TOP wall (44px distance)
+          ✅ Step 3: Drag from TOP to BOTTOM-LEFT (300, 900) → correctly snapped to BOTTOM wall (44px distance)
+          ✅ Step 4: Drag from BOTTOM to TOP-RIGHT (1700, 300) → correctly snapped to RIGHT wall (44px distance)
+          ✅ Step 5: Drag from RIGHT to LEFT (50, 540) → correctly snapped to LEFT wall (44px distance)
+          ✅ Step 6: Tap to open hub → Astral Hub opened successfully
+          
+          VERIFICATION:
+          - All 4 wall snaps (TOP, RIGHT, BOTTOM, LEFT) work correctly
+          - Dragging FROM any wall position (including TOP wall) works perfectly
+          - No more "stuck at top wall" issue
+          - Snap distance is consistent at 44px (16px padding + 28px half-orb)
+          - Tap functionality works correctly to toggle hub open/close
+          - Hub displays all required components: header, input field, ask button, 4 tiles
+          
+          ROOT CAUSE RESOLUTION:
+          The pointer-events:none fix on the SVG icons completely resolved the issue where
+          the SVG was intercepting pointer events before they could reach the button element.
+          Now all pointer events correctly target the button, allowing drag initiation from
+          any position including the top wall.
+          
+          IMPACT: Bug fully resolved. Feature is now working as designed with no known issues.
   - task: "Recurring schedule — weekday-mode grid"
     implemented: true
     working: "NA"
@@ -681,8 +716,7 @@ test_plan:
   current_focus:
     - "Recurring schedule UI — weekday columns instead of dates"
     - "Astral history persistence (frontend integration if any)"
-  stuck_tasks:
-    - "Floating Astral + Toolkit launcher (FAB) - drag snap broken"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
@@ -961,3 +995,31 @@ agent_communication:
       - orb-wall-position.png (shows orb stuck in middle, not at wall)
       - mobile-layout.png (2x2 grid layout)
       - drag-test-result.png (detailed drag test showing snap failure)
+  - agent: "testing"
+    message: |
+      ✅ BUG FIXED - FloatingLauncher drag-snap feature now fully working!
+      
+      FINAL REGRESSION TEST RESULTS (after pointer-events:none fix):
+      ✅ Step 1: Initial position read - orb at RIGHT wall (1876, 594)
+      ✅ Step 2: Drag to middle (960, 400) → correctly snapped to TOP wall (44px distance)
+      ✅ Step 3: Drag from TOP to BOTTOM-LEFT (300, 900) → correctly snapped to BOTTOM wall (44px distance)
+      ✅ Step 4: Drag from BOTTOM to TOP-RIGHT (1700, 300) → correctly snapped to RIGHT wall (44px distance)
+      ✅ Step 5: Drag from RIGHT to LEFT (50, 540) → correctly snapped to LEFT wall (44px distance)
+      ✅ Step 6: Tap to open hub → Astral Hub opened successfully with all components visible
+      
+      VERIFICATION SUMMARY:
+      - All 4 wall snaps (TOP, RIGHT, BOTTOM, LEFT) working correctly ✓
+      - Dragging FROM any wall position (including TOP wall) works perfectly ✓
+      - No more "stuck at top wall" issue ✓
+      - Snap distance consistent at 44px (16px padding + 28px half-orb) ✓
+      - Tap functionality works correctly to toggle hub open/close ✓
+      - Hub displays all required components: header, input, ask button, 4 tiles ✓
+      
+      ROOT CAUSE RESOLUTION:
+      The pointer-events:none fix on the SVG icons (lines 185 and 187 in FloatingLauncher.jsx)
+      completely resolved the issue where the SVG was intercepting pointer events before they
+      could reach the button element. Now all pointer events correctly target the button,
+      allowing drag initiation from any position.
+      
+      IMPACT: Bug fully resolved. Feature is now working as designed with no known issues.
+      The stuck task can be removed from the stuck_tasks list.

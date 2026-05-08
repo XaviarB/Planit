@@ -300,38 +300,8 @@ export default function GroupPage() {
           {/* Spacer pushes the right cluster to the opposite edge. */}
           <div className="flex-1 min-w-[16px]" />
 
-          {/* Right cluster — segmented view-tabs + (optional) Editing badge + theme toggle. */}
-          <div className="flex items-center gap-2 sm:gap-3" data-testid="view-tabs">
-            <div
-              className="inline-flex border-2 border-slate-900 rounded-full overflow-hidden"
-              style={{ boxShadow: "2px 2px 0 0 var(--ink)" }}
-            >
-              <button
-                onClick={() => { setTab("dates"); setEditMode(false); }}
-                data-testid="tab-dates"
-                className={`px-3 py-1 text-[11px] font-bold font-heading transition leading-tight ${
-                  tab === "dates" && !editMode
-                    ? "bg-slate-900 text-white"
-                    : "bg-white hover:bg-[var(--pastel-mint)]"
-                }`}
-              >
-                {/* Shorter label on mobile, full on desktop. */}
-                <span className="sm:hidden">Orbits</span>
-                <span className="hidden sm:inline">Sync Our Orbits</span>
-              </button>
-              <button
-                onClick={() => { setTab("members"); setEditMode(false); }}
-                data-testid="tab-members"
-                className={`px-3 py-1 text-[11px] font-bold font-heading transition leading-tight border-l-2 border-slate-900 ${
-                  tab === "members"
-                    ? "bg-slate-900 text-white"
-                    : "bg-white hover:bg-[var(--pastel-mint)]"
-                }`}
-              >
-                <span className="sm:hidden">Members</span>
-                <span className="hidden sm:inline">Members' schedule</span>
-              </button>
-            </div>
+          {/* Right cluster — (optional) Editing badge + theme toggle. View-tabs moved to Row 2. */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {editMode && (
               <span
                 className="px-3 py-2 rounded-full border-2 border-slate-900 text-sm font-bold font-heading bg-slate-900 text-white"
@@ -344,13 +314,43 @@ export default function GroupPage() {
           </div>
         </div>
 
-        {/* Row 2 — action buttons. Now just two: Suggest a time + Edit my
-            availability. Ask Astral and My Toolkit live in the floating
-            launcher so they're reachable from anywhere on the page. */}
+        {/* Row 2 — view-tabs + action buttons, evenly spread.
+            Order: Sync Our Orbits → Members' schedule → Edit my availability → Suggest a time. */}
         <div
-          className="mt-4 grid grid-cols-1 sm:flex sm:items-stretch gap-2 sm:gap-3"
+          className="mt-4 grid grid-cols-2 sm:flex sm:items-stretch gap-2 sm:gap-3"
           data-testid="action-row"
         >
+          <button
+            onClick={() => { setTab("dates"); setEditMode(false); }}
+            data-testid="tab-dates"
+            className={`neo-btn flex-1 justify-center text-base font-heading font-extrabold ${
+              tab === "dates" && !editMode ? "" : "ghost"
+            }`}
+            style={{ padding: "14px 22px" }}
+          >
+            <span className="sm:hidden">Orbits</span>
+            <span className="hidden sm:inline">Sync Our Orbits</span>
+          </button>
+          <button
+            onClick={() => { setTab("members"); setEditMode(false); }}
+            data-testid="tab-members"
+            className={`neo-btn flex-1 justify-center text-base font-heading font-extrabold ${
+              tab === "members" ? "" : "ghost"
+            }`}
+            style={{ padding: "14px 22px" }}
+          >
+            <span className="sm:hidden">Members</span>
+            <span className="hidden sm:inline">Members' schedule</span>
+          </button>
+          <button
+            className={`neo-btn flex-1 justify-center text-base ${editMode ? "" : "ghost"}`}
+            style={{ padding: "14px 22px" }}
+            onClick={onDoneEditing}
+            disabled={savingExit}
+            data-testid="toggle-edit-btn"
+          >
+            {editMode ? (savingExit ? "Saving..." : "Done editing") : "Edit my availability"}
+          </button>
           <SuggestMeeting
             members={visibleMembers}
             columns={columns}
@@ -363,15 +363,6 @@ export default function GroupPage() {
             wrapperClassName="relative flex-1"
             triggerClassName="neo-btn pastel w-full justify-center flex items-center gap-2 text-base font-heading font-extrabold"
           />
-          <button
-            className={`neo-btn flex-1 justify-center text-base ${editMode ? "" : "ghost"}`}
-            style={{ padding: "14px 22px" }}
-            onClick={onDoneEditing}
-            disabled={savingExit}
-            data-testid="toggle-edit-btn"
-          >
-            {editMode ? (savingExit ? "Saving..." : "Done editing") : "Edit my availability"}
-          </button>
         </div>
       </header>
 
@@ -504,7 +495,8 @@ export default function GroupPage() {
                 Week snapshot
               </span>
 
-              <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+              {/* Arrows hug the week label tightly on both sides. */}
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
@@ -523,20 +515,6 @@ export default function GroupPage() {
                 </span>
                 <button
                   type="button"
-                  className="neo-btn ghost text-sm whitespace-nowrap shrink-0"
-                  onClick={() => setWeekOffset(0)}
-                  data-testid="week-reset-btn"
-                  aria-hidden={weekOffset === 0}
-                  tabIndex={weekOffset === 0 ? -1 : 0}
-                  style={{
-                    visibility: weekOffset === 0 ? "hidden" : "visible",
-                  }}
-                  title="Jump back to this week"
-                >
-                  This week
-                </button>
-                <button
-                  type="button"
                   className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
                   onClick={() => setWeekOffset((o) => o + 1)}
                   data-testid="week-next-btn"
@@ -546,6 +524,24 @@ export default function GroupPage() {
                   <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
                 </button>
               </div>
+
+              {/* "This week" reset lives at the far end so the arrows stay
+                  glued to the week label. Placeholder keeps the layout
+                  balanced when the user is already on the current week. */}
+              <button
+                type="button"
+                className="neo-btn ghost text-sm whitespace-nowrap shrink-0"
+                onClick={() => setWeekOffset(0)}
+                data-testid="week-reset-btn"
+                aria-hidden={weekOffset === 0}
+                tabIndex={weekOffset === 0 ? -1 : 0}
+                style={{
+                  visibility: weekOffset === 0 ? "hidden" : "visible",
+                }}
+                title="Jump back to this week"
+              >
+                This week
+              </button>
             </div>
           )}
 

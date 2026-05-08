@@ -1,0 +1,24 @@
+{
+  "summary": "Re-verified the FAB first-tap fix in /app/frontend/src/components/FloatingLauncher.jsx after the refactor. ALL 7 first-tap scenarios pass: first mouse tap opens popover, outside click closes, repeat tap toggles, first touch tap opens popover, drag (>8px) does NOT open popover (and repositions orb 0.55 -> 0.2375), tap after drag opens popover. Regression suite also green: fab-open-astral opens astral-drawer, fab-open-tools opens tools-drawer (verified in isolation; the one initial FAIL was test-flow timing, not a real bug), and legacy [data-testid='open-astral-btn']/[data-testid='open-tools-btn'] remain absent. The previously reported MEDIUM bug (first-tap miss) is RESOLVED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/frontend/src/components/FloatingLauncher.jsx"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FloatingLauncher.jsx (273 lines) is now well-structured: window listeners bound once via useEffect deps=[], drag state held in useRef so handlers never go stale, popover toggle moved into the button's own onMouseUp/onTouchEnd so the React 18 batch commits synchronously on first tap. No further changes needed.",
+    "Group.jsx is still ~1056 lines (over the 700-line guideline). Extract RangeChipBar, MemberRow, LiveStatusBubble, and the iso* helpers into separate files. Carried over from iteration_2.",
+    "Consider extracting the drag/tap state-machine into a useDragHandlers hook for re-use beyond the FAB."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (per request)", "frontend": "100% (11/11 verified flows pass; the 7 FAB tap/drag scenarios + 4 regression checks)"},
+  "test_credentials": "Group code N7UVGL ('Weekend Warriors'). The previously-seeded member id 'b861aa5c-20be-44a8-b19d-db79b145f3e1' (Alex) is not present in the fresh browser context's localStorage — the join modal therefore appears on first load. Tests joined as 'TestFAB' via [data-testid=join-modal-name-input] + [data-testid=join-modal-submit-btn]. NEW testids discovered for the join modal: [data-testid=join-modal], [data-testid=join-modal-name-input], [data-testid=join-modal-submit-btn].",
+  "seed_data_creation": "Created a new throwaway member 'TestFAB' in group N7UVGL via the join modal so the FAB renders. Backend persisted; no cleanup needed for re-runs.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FAB first-tap fix is fully verified. NEW context: a fresh browser context will see the join modal on /g/N7UVGL because localStorage is empty — handle by filling [data-testid=join-modal-name-input] and clicking [data-testid=join-modal-submit-btn]. To use real touch events, create the browser context with has_touch=True (default contexts in this env have it disabled). When testing the tools drawer right after the astral drawer in the same flow, re-open the FAB popover deterministically (the popover is dependent on `dragging` state too — wait ~300ms after the click before checking visibility). Tools drawer testid is [data-testid=tools-drawer]; it renders as a 1920x800 fixed inset-0 z-50 flex container. Astral drawer dismisses on Escape. The legacy topbar buttons remain correctly absent.",
+  "rca of the issue": "The previous iteration_2 first-tap miss is fixed. RCA confirmed: the original DragBinder useEffect re-bound window mousemove/mouseup on every render (deps included inline arrow callbacks), causing the first synthesized mouseup to race with listener cleanup; additionally the popover toggle was driven from the window-level endDrag rather than the button itself. The fix in FloatingLauncher.jsx (a) binds window listeners once with deps=[] using a ref-based drag state machine (lines 71-118), and (b) moves the toggle into the button's own onMouseUp/onTouchEnd handlers via endPressOnOrb (lines 132-142), so the setOpen call commits synchronously inside the React event handler — first tap now opens the popover deterministically on both mouse and touch."
+}

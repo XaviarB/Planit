@@ -16,12 +16,17 @@
     --pastel-yellow: #fef9e7;
     --pastel-lavender: #f4ecf7;
     --pastel-peach: #fde2d3;
-    /* Neon orange/red gradient (nobody → everyone free) */
-    --heat-0: #1f0500;
-    --heat-1: #dc2626;
-    --heat-2: #fb923c;
-    --heat-3: #fcd34d;
-    --heat-all: #fffbeb;
+    /* Heatmap gradient — green walk (nobody free → everyone free).
+       Light mode uses a forest-to-mint gradient: darkest emerald for "nobody
+       free" through pale mint for "everyone free". The shades are spaced
+       on Tailwind's emerald scale (950 / 800 / 500 / 300 / 100) so each
+       step has obvious lightness contrast against the next. Dark mode keeps
+       its neon-blue palette below — only the light theme is green. */
+    --heat-0: #052e16;
+    --heat-1: #166534;
+    --heat-2: #22c55e;
+    --heat-3: #86efac;
+    --heat-all: #dcfce7;
 }
 
 html.dark {

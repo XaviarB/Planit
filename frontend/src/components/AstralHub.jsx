@@ -321,15 +321,29 @@ export default function AstralHub({
                   </span>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-yellow)] transition"
-                aria-label="Close"
-                data-testid="hub-close"
-              >
-                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {mode !== "settings" && (
+                  <button
+                    type="button"
+                    onClick={() => setMode("settings")}
+                    className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-sky,#e0f2fe)] transition"
+                    aria-label="Astral settings"
+                    title="astral settings — tone, voice, default area"
+                    data-testid="hub-settings-btn"
+                  >
+                    <Settings className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-yellow)] transition"
+                  aria-label="Close"
+                  data-testid="hub-close"
+                >
+                  <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </button>
+              </div>
             </div>
 
             {/* Body — switches by mode */}
@@ -353,7 +367,6 @@ export default function AstralHub({
                     setToolsOpen(true);
                     onClose && onClose();
                   }}
-                  openSettings={() => setMode("settings")}
                 />
               )}
 
@@ -450,7 +463,7 @@ export default function AstralHub({
 
 function MenuBody({
   inputRef, windowBlurb, setWindowBlurb, submitAsk, errMsg,
-  isMac, tile, openDrawer, openTools, openSettings,
+  isMac, tile, openDrawer, openTools,
 }) {
   return (
     <div className="px-4 pt-4 pb-4 space-y-4">
@@ -541,14 +554,6 @@ function MenuBody({
           accent: "var(--pastel-yellow)",
           testId: "hub-tile-tools",
           onClick: () => openTools(null),
-        })}
-        {tile({
-          icon: Settings,
-          title: "settings",
-          hint: "tune astral — tone, voice, emojis, default area",
-          accent: "var(--pastel-sky, #e0f2fe)",
-          testId: "hub-tile-settings",
-          onClick: openSettings,
         })}
       </div>
 

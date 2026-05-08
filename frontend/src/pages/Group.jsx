@@ -566,7 +566,7 @@ export default function GroupPage() {
               date-bound groups; recurring groups always show a weekday grid). */}
           {tab === "dates" && !editMode && !isRecurring && (
             <div
-              className="neo-card p-4 sm:p-5 flex flex-wrap items-center justify-center sm:justify-between gap-4"
+              className="neo-card p-4 sm:p-5 flex items-center justify-between gap-3 flex-nowrap"
               style={{ background: "var(--pastel-mint)" }}
               data-testid="weekly-snapshot-banner"
             >
@@ -578,7 +578,7 @@ export default function GroupPage() {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition shrink-0"
                   onClick={() => setWeekOffset((o) => o - 1)}
                   data-testid="week-prev-btn"
                   aria-label="Previous week"
@@ -587,14 +587,14 @@ export default function GroupPage() {
                   <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
                 </button>
                 <span
-                  className="font-heading font-black text-xl sm:text-2xl whitespace-nowrap w-[220px] sm:w-[260px] text-center tracking-tight"
+                  className="font-heading font-black text-lg sm:text-2xl whitespace-nowrap text-center tracking-tight px-2"
                   data-testid="week-snapshot-label"
                 >
                   {formatDateShort(week.monday)} → {formatDateShort(week.sunday)}
                 </span>
                 <button
                   type="button"
-                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition shrink-0"
                   onClick={() => setWeekOffset((o) => o + 1)}
                   data-testid="week-next-btn"
                   aria-label="Next week"

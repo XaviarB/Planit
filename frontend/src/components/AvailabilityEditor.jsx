@@ -84,6 +84,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
   const [activeReason, setActiveReason] = useState(reasons[0]?.id || null);
   const [drag, setDrag] = useState(null); // {targetStatus}
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [recurringPanelOpen, setRecurringPanelOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#7FB3D5");
   const [reasonBusy, setReasonBusy] = useState(false);
@@ -367,6 +368,20 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
             }`}
           />
         </button>
+        <button
+          type="button"
+          onClick={() => setRecurringPanelOpen((v) => !v)}
+          className="neo-btn ghost text-sm flex items-center gap-1.5"
+          data-testid="recurring-busy-toggle-btn"
+        >
+          <Repeat className="w-3.5 h-3.5" />
+          Recurring busy
+          <ChevronDown
+            className={`w-3.5 h-3.5 transition-transform ${
+              recurringPanelOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
       </div>
 
       {/* Reason selector */}
@@ -461,7 +476,9 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
       </div>
 
       {/* Personal-only — recurring events parser + theme/font. Stored locally,
-          never affects the shared group schedule view. */}
+          never affects the shared group schedule view. Hidden by default,
+          revealed via the "Recurring busy" toggle in the toolbar above. */}
+      {recurringPanelOpen && (
       <div
         className="mb-4 p-3 rounded-xl border-2 border-slate-900 bg-[var(--card-soft,var(--card))] space-y-3"
         data-testid="editor-personal-panel"
@@ -577,6 +594,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
           </div>
         </div>
       </div>
+      )}
 
       {/* Editable grid */}
       <div

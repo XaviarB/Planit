@@ -521,8 +521,8 @@ function MenuBody({
         )}
       </div>
 
-      {/* Tile grid */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Tile column — 1x4 vertical stack */}
+      <div className="flex flex-col gap-2">
         {tile({
           icon: Shuffle,
           title: "remix",

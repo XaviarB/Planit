@@ -126,7 +126,10 @@ export default function AstralDrawer({
       setShownCards([]);
       setRemixPresets([]);
       setRemixHint("");
-      if (suggestedWindow) setWindowBlurb(suggestedWindow);
+      // Clear any stale typed window first; if a context-provided suggestedWindow
+      // exists (e.g. user clicked a heatmap cell that pre-selected a slot),
+      // seed it so the user doesn't have to retype.
+      setWindowBlurb(suggestedWindow || "");
     }
     lastOpenRef.current = open;
   }, [open, suggestedWindow]);

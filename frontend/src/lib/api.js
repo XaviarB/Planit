@@ -47,6 +47,25 @@ export const deleteGroup = (code) =>
 export const leaveGroup = (code, member_id) =>
   api.delete(`/groups/${code}/members/${member_id}`).then((r) => r.data);
 
+// ---------- Customization (Phase 5) ----------
+
+// Group-wide visual identity. Anyone in the group can edit. Returns
+// { ok, branding } from the server.
+export const updateBranding = (code, payload) =>
+  api.put(`/groups/${code}/branding`, payload).then((r) => r.data);
+
+// Group-wide locale (timezone, week-start, time-format, day window, slot precision).
+export const updateLocale = (code, payload) =>
+  api.put(`/groups/${code}/locale`, payload).then((r) => r.data);
+
+// Astral persona — display name, tone, lowercase rule, emoji on/off, default location.
+export const updateAstralPersona = (code, payload) =>
+  api.put(`/groups/${code}/astral-persona`, payload).then((r) => r.data);
+
+// Per-member personal preferences (FAB side, theme, compact, hidden panels, color override).
+export const updateMemberPrefs = (code, member_id, payload) =>
+  api.put(`/groups/${code}/members/${member_id}/prefs`, payload).then((r) => r.data);
+
 // ---------- Astral concierge ----------
 
 export const astralSuggest = (code, payload) =>

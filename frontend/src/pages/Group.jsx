@@ -65,6 +65,56 @@ export default function GroupPage() {
     });
   }, [code, tab, rangeStart, rangeEnd, hourFrom, hourTo, minuteStep, focusMemberIds]);
 
+  // Phase-5: when the group payload arrives, fold its customization into the
+  // page state — but ONLY if the user has no per-group persisted preference
+  // for that key yet (so once a member scrubs to a custom range / precision
+  // / tab, we never overwrite their choice on a re-fetch).
+  const appliedDefaultsRef = useRef(false);
+  useEffect(() => {
+    if (!group || appliedDefaultsRef.current) return;
+    appliedDefaultsRef.current = true;
+    const p = getGroupViewState(code) || {};
+    if (!p.tab && group.branding?.default_view) {
+      setTab(group.branding.default_view);
+    }
+    if (typeof p.minuteStep !== "number" && group.locale?.slot_minutes) {
+      setMinuteStep(group.locale.slot_minutes);
+    }
+    if (
+      typeof p.hourFrom !== "number" &&
+      typeof group.locale?.day_start_hour === "number"
+    ) {
+      setHourFrom(group.locale.day_start_hour);
+    }
+    if (
+      typeof p.hourTo !== "number" &&
+      typeof group.locale?.day_end_hour === "number"
+    ) {
+      setHourTo(group.locale.day_end_hour);
+    }
+  }, [group, code]);
+
+  // Wrapper style — applies the group's branded gradient + accent as CSS
+  // variables scoped to just this page (Group page only re-skins; Landing
+  // intentionally stays canonical Planit).
+  const groupBrandingStyle = (() => {
+    const b = group?.branding;
+    if (!b) return undefined;
+    return {
+      "--planit-accent": b.accent_hex || "#0f172a",
+      "--planit-grad-from": b.gradient_from || "#fef9e7",
+      "--planit-grad-to": b.gradient_to || "#d1f2eb",
+      backgroundImage: `linear-gradient(180deg, ${b.gradient_from || "#fef9e7"}33 0%, ${b.gradient_to || "#d1f2eb"}33 320px, transparent 600px)`,
+    };
+  })();
+
+  // Phase-5 personal prefs — drives hidden_panels gating below.
+  const myPrefs = (() => {
+    const me = (group?.members || []).find((m) => m.id === memberId);
+    return me?.prefs || {};
+  })();
+  const hiddenPanels = new Set(myPrefs.hidden_panels || []);
+
   // Inject per-group Open Graph meta tags into the document head so when
   // someone pastes the /g/{code} link in iMessage / Slack / Discord they
   // get a personalized unfurl card (group name + member count + invite code).
@@ -254,7 +304,11 @@ export default function GroupPage() {
   };
 
   return (
-    <div className="min-h-screen grain pb-24" data-testid="group-page">
+    <div
+      className="min-h-screen grain pb-24"
+      data-testid="group-page"
+      style={groupBrandingStyle}
+    >
       {/* Two-row topbar.
           Row 1 — group identity on the left, the segmented view-tabs + theme toggle on the right.
           Row 2 — the four big action buttons stretched edge-to-edge across the page width. */}
@@ -278,6 +332,19 @@ export default function GroupPage() {
           <div className="shrink-0">
             <div className="label-caps" style={{ color: "var(--ink-mute)" }}>Group</div>
             <div className="flex items-center gap-2 flex-wrap">
+              {group.branding?.emoji && (
+                <span
+                  className="w-9 h-9 rounded-xl border-2 border-slate-900 grid place-items-center text-xl shrink-0"
+                  style={{
+                    background:
+                      group.branding?.gradient_from || "var(--pastel-mint)",
+                  }}
+                  data-testid="group-emoji-chip"
+                  title="group emoji"
+                >
+                  {group.branding.emoji}
+                </span>
+              )}
               <GroupMenu
                 group={group}
                 onRenamed={(name) => setGroup((g) => ({ ...g, name }))}
@@ -366,98 +433,107 @@ export default function GroupPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-12 gap-6">
-        {/* Sidebar — order: Quick stats → Invite friends → Heatmap legend → Members.
+        {/* Sidebar — order: Quick stats → Hangouts → Invite friends → Members → Heatmap legend.
+            Members lifted above the legend per UX request; legend now anchors the bottom of the rail.
             Each card pops in 80ms after the previous one for a premium entrance. */}
         <aside className="lg:col-span-3 space-y-6">
-          <div className="pop-in" style={{ animationDelay: "0ms" }}>
-            <QuickStats
-              members={visibleMembers}
-              columns={heatmapColumns}
-              mode={gridMode}
-              hourFrom={0}
-              hourTo={23}
-              minuteStep={60}
-              meId={memberId}
-            />
-          </div>
+          {!hiddenPanels.has("stats") && (
+            <div className="pop-in" style={{ animationDelay: "0ms" }}>
+              <QuickStats
+                members={visibleMembers}
+                columns={heatmapColumns}
+                mode={gridMode}
+                hourFrom={0}
+                hourTo={23}
+                minuteStep={60}
+                meId={memberId}
+              />
+            </div>
+          )}
 
           {/* Phase 4 — locked / tentative hangouts. Quietly hides itself when
               the group has nothing on the calendar. */}
-          <div className="pop-in" style={{ animationDelay: "60ms" }}>
-            <HangoutsList
-              group={group}
-              memberId={memberId}
-              onChanged={(h) =>
-                setGroup((prev) => (prev ? { ...prev, hangouts: h } : prev))
-              }
-            />
-          </div>
-
-          <div className="neo-card p-4 pop-in relative z-30" style={{ animationDelay: "80ms" }} data-testid="share-card">
-            <div className="label-caps mb-3 flex items-center gap-2">
-              <Share2 className="w-4 h-4" /> Invite friends
-            </div>
-            <div className="flex flex-col gap-2">
-              <ShareMenu
-                url={`${window.location.origin}/g/${code}`}
-                groupName={group.name}
+          {!hiddenPanels.has("hangouts") && (
+            <div className="pop-in" style={{ animationDelay: "60ms" }}>
+              <HangoutsList
+                group={group}
+                memberId={memberId}
+                onChanged={(h) =>
+                  setGroup((prev) => (prev ? { ...prev, hangouts: h } : prev))
+                }
               />
-              <button
-                className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
-                onClick={onCopyCode}
-                data-testid="copy-code-btn"
-              >
-                <span className="label-caps">Code</span>
-                <span className="flex items-center gap-2">
-                  <span className="font-mono tracking-widest font-bold">{group.code}</span>
-                  <Copy className="w-4 h-4" />
-                </span>
-              </button>
             </div>
-          </div>
+          )}
 
-          <div className="pop-in" style={{ animationDelay: "160ms" }}>
-            <LegendEditor />
-          </div>
-
-          <div className="neo-card p-5 pop-in" style={{ animationDelay: "240ms" }} data-testid="members-card">
-            <div className="label-caps mb-3 flex items-center gap-2">
-              <Users className="w-4 h-4" /> Members ({group.members.length})
-            </div>
-            <ul className="space-y-2">
-              {group.members.map((m) => (
-                <MemberRow
-                  key={m.id}
-                  m={m}
-                  isMe={m.id === memberId}
-                  code={code}
-                  isFocused={focusMemberIds.includes(m.id)}
-                  liveStatus={liveStatus[m.id]}
-                  reasonMap={reasonMap}
-                  onToggleFocus={() => toggleFocus(m.id)}
-                  onRenamed={(name) =>
-                    setGroup((g) => ({
-                      ...g,
-                      members: g.members.map((x) => (x.id === m.id ? { ...x, name } : x)),
-                    }))
-                  }
+          {!hiddenPanels.has("share") && (
+            <div className="neo-card p-4 pop-in relative z-30" style={{ animationDelay: "80ms" }} data-testid="share-card">
+              <div className="label-caps mb-3 flex items-center gap-2">
+                <Share2 className="w-4 h-4" /> Invite friends
+              </div>
+              <div className="flex flex-col gap-2">
+                <ShareMenu
+                  url={`${window.location.origin}/g/${code}`}
+                  groupName={group.name}
                 />
-              ))}
-            </ul>
-            {focusMemberIds.length > 0 && (
-              <button
-                onClick={() => setFocusMemberIds([])}
-                className="mt-3 w-full text-xs neo-btn ghost py-2"
-                data-testid="focus-clear-btn"
-              >
-                Show all members
-              </button>
-            )}
-            {focusMemberIds.length === 1 && group.members.length > 1 && (
-              <p className="mt-2 text-[11px]" style={{ color: "var(--ink-soft)" }}>
-                Tap another member's bubble to compare.
-              </p>
-            )}
+                <button
+                  className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
+                  onClick={onCopyCode}
+                  data-testid="copy-code-btn"
+                >
+                  <span className="label-caps">Code</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono tracking-widest font-bold">{group.code}</span>
+                    <Copy className="w-4 h-4" />
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="pop-in" style={{ animationDelay: "160ms" }} data-testid="members-card-wrap">
+            <div className="neo-card p-5" data-testid="members-card">
+              <div className="label-caps mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4" /> Members ({group.members.length})
+              </div>
+              <ul className="space-y-2">
+                {group.members.map((m) => (
+                  <MemberRow
+                    key={m.id}
+                    m={m}
+                    isMe={m.id === memberId}
+                    code={code}
+                    isFocused={focusMemberIds.includes(m.id)}
+                    liveStatus={liveStatus[m.id]}
+                    reasonMap={reasonMap}
+                    onToggleFocus={() => toggleFocus(m.id)}
+                    onRenamed={(name) =>
+                      setGroup((g) => ({
+                        ...g,
+                        members: g.members.map((x) => (x.id === m.id ? { ...x, name } : x)),
+                      }))
+                    }
+                  />
+                ))}
+              </ul>
+              {focusMemberIds.length > 0 && (
+                <button
+                  onClick={() => setFocusMemberIds([])}
+                  className="mt-3 w-full text-xs neo-btn ghost py-2"
+                  data-testid="focus-clear-btn"
+                >
+                  Show all members
+                </button>
+              )}
+              {focusMemberIds.length === 1 && group.members.length > 1 && (
+                <p className="mt-2 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+                  Tap another member's bubble to compare.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="pop-in" style={{ animationDelay: "240ms" }}>
+            <LegendEditor />
           </div>
         </aside>
 
@@ -665,6 +741,10 @@ export default function GroupPage() {
         group={group}
         memberId={memberId}
         code={code}
+        defaultSide={
+          (group.members || []).find((m) => m.id === memberId)?.prefs
+            ?.fab_side
+        }
         onGroupRefresh={(updater) => {
           if (typeof updater === "function") {
             setGroup((prev) => updater(prev));

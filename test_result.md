@@ -857,16 +857,149 @@ frontend:
           All sort and filter controls working correctly with proper visual feedback. Screenshot
           captured showing history panel with sort/filter controls. Feature working perfectly.
 
+  - task: "Phase 5 — Customization: PUT /api/groups/{code}/branding"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          New endpoint to update group-wide visual branding (accent_hex,
+          gradient_from, gradient_to, emoji, theme_variant, default_view).
+          Accepts partial payloads — omitted fields are preserved. Hex inputs
+          coerced via _norm_hex. theme_variant validated against allowed set.
+          Returns {ok: true, branding: {...}}. Anyone in the group can edit.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 6 branding endpoint scenarios passed:
+          1a. Full payload (all fields) → All values accepted and returned correctly
+          1b. Partial update (only accent_hex) → Other fields preserved from previous update
+          1c. Hex without leading # ("aabbcc") → Normalized to "#aabbcc"
+          1d. Invalid theme_variant ("rainbow") → Fell back to current value "noir"
+          1e. Invalid default_view ("calendar") → Fell back to current value "members"
+          1f. Unknown group code "XXXXXX" → Returned 404
+          Test group: EFQDSD. All acceptance criteria met.
+
+  - task: "Phase 5 — Customization: PUT /api/groups/{code}/locale"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Update group-wide locale (timezone, week_start, time_format,
+          day_start_hour, day_end_hour, slot_minutes). Cross-field guard:
+          end <= start triggers silent rollback to previous values. slot_minutes
+          accepts only 15/30/60. day_start in 0-23, day_end in 1-24.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 4 locale endpoint scenarios passed:
+          2a. Full payload (all 6 fields) → All values accepted and returned correctly
+          2b. Cross-field guard (day_start_hour=18, day_end_hour=9, time_format="12h") →
+              time_format applied, but invalid hours silently rejected (kept at 8 and 22)
+          2c. Invalid slot_minutes (45) → Fell back to current value 30
+          2d. Invalid week_start ("monday") → Fell back to current value "sun"
+          Test group: EFQDSD. Cross-field validation working correctly.
+
+  - task: "Phase 5 — Customization: PUT /api/groups/{code}/astral-persona"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/astral.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Update Astral persona: display_name (≤32), tone (edgy/warm/minimal/hype),
+          lowercase (bool), emoji_on (bool), default_location (str|null).
+          Folded into prompts via _persona_overlay() in astral.py — both
+          suggest_hangouts and draft_invite now accept astral_persona kwarg.
+          Server suggest endpoint also uses persona.default_location as a
+          fallback when neither request override nor group base location set.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 astral-persona endpoint scenarios passed:
+          3a. Full payload (all 5 fields) → All values accepted and returned correctly
+          3b. Empty display_name ("") → Preserved previous value "nova"
+          3c. Invalid tone ("loud") → Fell back to current value "warm"
+          3d. Empty default_location ("") → Cleared to null
+          3e. Smoke check: POST /api/groups/{code}/astral/suggest after persona update →
+              Returned 200 with intro and cards (≤3), persona plumbing doesn't break suggest
+          Test group: EFQDSD. Gemini call completed in ~15s.
+
+  - task: "Phase 5 — Customization: PUT /api/groups/{code}/members/{member_id}/prefs"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Per-member prefs: color_hex (override avatar), fab_side (left/right/top/bottom),
+          theme (light/dark/auto), compact (bool), hidden_panels (subset of
+          stats/hangouts/share). Returns 404 if member_id not in group. color_hex=""
+          clears the override. hidden_panels filtered to allowed set.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 member prefs endpoint scenarios passed:
+          4a. Full payload (all 5 fields) on real member → All values accepted and returned correctly
+          4b. Unknown member_id "unknown-member-id" → Returned 404
+          4c. Empty color_hex ("") → Cleared to null
+          4d. hidden_panels with unknown value (["stats", "unknown", "hangouts"]) →
+              Filtered to ["stats", "hangouts"]
+          4e. Invalid fab_side ("middle") → Fell back to current value "left"
+          Test group: EFQDSD, creator member. All validation working correctly.
+
+  - task: "Phase 5 — GET /api/groups/{code} backfill for new fields"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          get_group now backfills group.branding, group.locale, group.astral_persona,
+          and member.prefs with default models when missing on legacy docs so
+          the frontend can read defaults without nullchecks everywhere.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - GET /api/groups/{code} backfill working correctly:
+          Created fresh group (JE7GKX) and verified all default fields present:
+          - branding: accent_hex="#0f172a", emoji="🪐", theme_variant="default", default_view="dates"
+          - locale: week_start="mon", time_format="12h", day_start_hour=0, day_end_hour=23, slot_minutes=60
+          - astral_persona: display_name="astral", tone="edgy", lowercase=true, emoji_on=true
+          - member.prefs: fab_side="right", theme="auto", compact=false, hidden_panels=[]
+          All documented defaults match specification. Legacy document compatibility ensured.
+
 metadata:
   created_by: "main_agent"
-  version: "1.3"
-  test_sequence: 4
+  version: "1.4"
+  test_sequence: 5
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Recurring schedule UI — weekday columns instead of dates"
-    - "Backend: Astral history persistence, Group remix defaults, Recurrence toggle, OG card endpoints"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -1243,3 +1376,127 @@ agent_communication:
       - Backend tasks still need testing: Astral history persistence endpoints, Group remix defaults,
         Recurrence toggle, OG card image endpoints
       - Recurring schedule UI (weekday columns) needs testing
+
+  - agent: "main"
+    message: |
+      PHASE 5 — CUSTOMIZATION ENDPOINTS — please test backend ONLY (no frontend test yet).
+      
+      NEW ENDPOINTS to verify (anyone in group can edit, no creator-only check):
+      
+      1) PUT /api/groups/{code}/branding
+         Body fields (all optional — partial updates supported):
+           - accent_hex (hex string)
+           - gradient_from (hex)
+           - gradient_to (hex)
+           - emoji (string, ≤8 chars)
+           - theme_variant (one of: default, noir, candy, forest, ocean)
+           - default_view (one of: dates, members)
+         Acceptance:
+           a. Send all fields → returns {ok: true, branding: {...all updated values...}}
+           b. Send only accent_hex → returns merged branding (other fields unchanged from defaults).
+           c. Hex without leading # ("ff5500") gets normalized to "#ff5500".
+           d. Bad theme_variant ("rainbow") falls back to current value.
+           e. Bad default_view falls back to current value.
+           f. 404 for unknown group code.
+      
+      2) PUT /api/groups/{code}/locale
+         Body fields (all optional):
+           - timezone (string, ≤64), week_start ("mon"|"sun"), time_format ("12h"|"24h")
+           - day_start_hour (0-23), day_end_hour (1-24), slot_minutes (15|30|60)
+         Acceptance:
+           a. Full payload → returns updated locale.
+           b. day_end_hour <= day_start_hour → BOTH start/end silently rejected, others applied.
+              e.g. PUT {day_start_hour: 18, day_end_hour: 9, time_format: "24h"} → time_format
+              applied, hours kept at previous values. Verify by reading group after.
+           c. slot_minutes=45 (invalid) → keeps previous value.
+           d. Bad week_start "monday" → keeps previous.
+      
+      3) PUT /api/groups/{code}/astral-persona
+         Body fields (all optional):
+           - display_name (string ≤32), tone (edgy|warm|minimal|hype)
+           - lowercase (bool), emoji_on (bool), default_location (string|null)
+         Acceptance:
+           a. Full payload → returns updated astral_persona.
+           b. display_name="" preserves previous value.
+           c. tone="loud" (invalid) → keeps previous.
+           d. default_location="" stores null (clears the field).
+           e. After saving display_name=nova + tone=warm + lowercase=false, calling
+              POST /api/groups/{code}/astral/suggest should still return 200 (we're
+              not testing prompt content, just that persona plumbing doesn't break suggest).
+      
+      4) PUT /api/groups/{code}/members/{member_id}/prefs
+         Body fields (all optional):
+           - color_hex (hex|""), fab_side (left|right|top|bottom)
+           - theme (light|dark|auto), compact (bool), hidden_panels (list of stats|hangouts|share)
+         Acceptance:
+           a. Full payload on a real member → returns updated prefs.
+           b. Unknown member_id → 404.
+           c. color_hex="" sets it to null.
+           d. hidden_panels=["stats","unknown","hangouts"] → stored as ["stats","hangouts"].
+           e. fab_side="middle" (invalid) → keeps previous.
+      
+      5) GET /api/groups/{code} backfill
+         Acceptance:
+           - For a freshly created group, response.branding, response.locale,
+             response.astral_persona, and each member.prefs are all present with
+             the documented defaults (accent_hex="#0f172a", emoji="🪐", week_start="mon",
+             time_format="12h", display_name="astral", tone="edgy", lowercase=true,
+             emoji_on=true, fab_side="right", theme="auto", compact=false, hidden_panels=[]).
+      
+      Use a fresh group from POST /api/groups (group_name="Phase5Test", creator_name="Alex",
+      location="NYC"). Don't re-test the broader Phase-2/3/4 surface — those are already green.
+
+
+  - agent: "testing"
+    message: |
+      ✅ PHASE 5 CUSTOMIZATION TESTING COMPLETE - ALL ENDPOINTS WORKING PERFECTLY
+      
+      Tested all 5 Phase 5 customization backend endpoints as requested. Created test groups
+      EFQDSD and JE7GKX for comprehensive validation.
+      
+      **TEST RESULTS SUMMARY:**
+      
+      1. PUT /api/groups/{code}/branding (6/6 scenarios) ✅
+         - Full payload accepted
+         - Partial updates preserve other fields
+         - Hex normalization (no leading #) works
+         - Invalid theme_variant/default_view fall back correctly
+         - 404 on unknown group code
+      
+      2. PUT /api/groups/{code}/locale (4/4 scenarios) ✅
+         - Full payload accepted
+         - Cross-field guard (end <= start) silently rejects invalid hours
+         - Invalid slot_minutes/week_start fall back correctly
+      
+      3. PUT /api/groups/{code}/astral-persona (5/5 scenarios) ✅
+         - Full payload accepted
+         - Empty display_name preserves previous value
+         - Invalid tone falls back correctly
+         - Empty default_location clears to null
+         - Astral suggest still works after persona update (200 with cards)
+      
+      4. PUT /api/groups/{code}/members/{member_id}/prefs (5/5 scenarios) ✅
+         - Full payload accepted
+         - 404 on unknown member_id
+         - Empty color_hex clears to null
+         - hidden_panels filters unknown values
+         - Invalid fab_side falls back correctly
+      
+      5. GET /api/groups/{code} backfill (4/4 field groups) ✅
+         - branding defaults present and correct
+         - locale defaults present and correct
+         - astral_persona defaults present and correct
+         - member.prefs defaults present and correct
+      
+      **TOTAL: 24/24 acceptance criteria passed. Zero issues found.**
+      
+      All validation logic working correctly:
+      - Hex normalization via _norm_hex
+      - Enum validation with fallback to current values
+      - Cross-field guards (locale hours)
+      - Array filtering (hidden_panels)
+      - Empty string handling (clears to null for location/color)
+      - Partial update support (omitted fields preserved)
+      - 404 error handling
+      
+      Phase 5 customization backend is production-ready.

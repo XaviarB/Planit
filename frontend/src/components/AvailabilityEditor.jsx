@@ -216,32 +216,10 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
 
   return (
     <div className="neo-card p-4 sm:p-6" data-testid="availability-editor">
-      {/* Toolbar — Clear view + Customize labels on top, Precision below.
-          Two evenly-balanced rows so the editor header doesn't feel lopsided. */}
-      <div className="flex flex-wrap items-center justify-end gap-3 mb-3">
-        <button
-          className="neo-btn ghost text-sm"
-          onClick={onClear}
-          data-testid="editor-clear-btn"
-        >
-          Clear view
-        </button>
-        <button
-          type="button"
-          onClick={() => setCustomizeOpen((v) => !v)}
-          className="neo-btn ghost text-sm flex items-center gap-1.5"
-          data-testid="customize-labels-btn"
-        >
-          <Settings className="w-3.5 h-3.5" />
-          Customize labels
-          <ChevronDown
-            className={`w-3.5 h-3.5 transition-transform ${
-              customizeOpen ? "rotate-180" : ""
-            }`}
-          />
-        </button>
-      </div>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      {/* Toolbar — Precision · Clear view · Customize labels all on a single row.
+          Precision sits flush-left, the two action buttons hug the right. On narrow
+          viewports it wraps gracefully but the desktop default is one continuous row. */}
+      <div className="flex flex-wrap items-center gap-3 mb-4" data-testid="editor-toolbar">
         <div className="label-caps">Precision</div>
         <div
           className="inline-flex rounded-full border-2 border-slate-900 overflow-hidden"
@@ -263,6 +241,30 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
             </button>
           ))}
         </div>
+
+        <div className="flex-1" />
+
+        <button
+          className="neo-btn ghost text-sm"
+          onClick={onClear}
+          data-testid="editor-clear-btn"
+        >
+          Clear view
+        </button>
+        <button
+          type="button"
+          onClick={() => setCustomizeOpen((v) => !v)}
+          className="neo-btn ghost text-sm flex items-center gap-1.5"
+          data-testid="customize-labels-btn"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Customize labels
+          <ChevronDown
+            className={`w-3.5 h-3.5 transition-transform ${
+              customizeOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
       </div>
 
       {/* Reason selector */}

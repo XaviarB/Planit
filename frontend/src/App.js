@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
 import GroupPage from "./pages/Group";
+import CustomizePage from "./pages/Customize";
 import { Toaster } from "sonner";
 import { getInitialTheme } from "./components/ThemeToggle";
 
@@ -18,6 +19,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/g/:code" element={<GroupPage />} />
+          <Route path="/g/:code/customize" element={<CustomizePage />} />
         </Routes>
       </BrowserRouter>
     </div>

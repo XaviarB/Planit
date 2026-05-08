@@ -59,6 +59,51 @@ content rules:
 - if you make a venue up, you've failed. better to suggest fewer real places.
 """
 
+
+# --------------------------------------------------------------------------- #
+# Persona overlay — folds the group's customized AstralPersona on top of the   #
+# canonical persona. Lets each crew rename astral, swap tone, force/relax     #
+# the lowercase rule, and toggle emojis.                                      #
+# --------------------------------------------------------------------------- #
+
+_TONE_DESCRIPTIONS = {
+    "edgy":    "stay edgy, dry, observant — older-sibling energy.",
+    "warm":    "warmer voice — kind, encouraging, still concise. dial back the dryness.",
+    "minimal": "stripped down — short factual sentences, no flourish, no jokes.",
+    "hype":    "amped, enthusiastic — short bursts, light slang, slightly more emojis. still real venues only.",
+}
+
+
+def _persona_overlay(persona: Optional[Dict[str, Any]]) -> str:
+    """Return a small block of overrides to append to ASTRAL_PERSONA based
+    on the group's saved AstralPersona settings. No-op if `persona` is empty
+    or all-defaults — in that case we want to keep the canonical voice."""
+    if not persona or not isinstance(persona, dict):
+        return ""
+    name = (persona.get("display_name") or "").strip()
+    tone = (persona.get("tone") or "").strip().lower()
+    lowercase = persona.get("lowercase")
+    emoji_on = persona.get("emoji_on")
+    lines: List[str] = []
+    if name and name != "astral":
+        lines.append(
+            f"- you go by '{name}' in this group, not 'astral'. when you sign or self-reference, use '{name}'."
+        )
+    if tone in _TONE_DESCRIPTIONS and tone != "edgy":
+        lines.append(f"- tone for this crew: {_TONE_DESCRIPTIONS[tone]}")
+    if lowercase is False:
+        lines.append("- USE NORMAL CAPITALIZATION for this group (sentence case). drop the all-lowercase rule.")
+    if emoji_on is False:
+        lines.append("- NO emojis at all in your output for this group.")
+    elif emoji_on is True and tone == "hype":
+        lines.append("- a couple of emojis are welcome but don't overdo it (max 2 per response).")
+    if not lines:
+        return ""
+    return (
+        "\n\n---\n\nthis group has customized your voice — the rules below "
+        "OVERRIDE the defaults above:\n" + "\n".join(lines)
+    )
+
 # --------------------------------------------------------------------------- #
 # Internal: build a fresh LlmChat                                             #
 # --------------------------------------------------------------------------- #
@@ -285,6 +330,7 @@ async def suggest_hangouts(
     previous_cards: Optional[List[Dict[str, Any]]] = None,
     remix_presets: Optional[List[str]] = None,
     remix_hint: Optional[str] = None,
+    astral_persona: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Returns {"intro": str, "cards": [card,...]}. Up to 3 cards.
 
@@ -329,7 +375,7 @@ async def suggest_hangouts(
             remix_blurb=remix_blurb,
         )
 
-    sys = ASTRAL_PERSONA + "\n\n---\n\n" + base
+    sys = ASTRAL_PERSONA + _persona_overlay(astral_persona) + "\n\n---\n\n" + base
 
     user_parts = [
         f"group name: {group_name or 'untitled'}",
@@ -435,8 +481,9 @@ async def draft_invite(
     suggestion: Dict[str, Any],
     group_name: str,
     window_blurb: str,
+    astral_persona: Optional[Dict[str, Any]] = None,
 ) -> str:
-    sys = ASTRAL_PERSONA + "\n\n---\n\n" + DRAFT_INVITE_INSTRUCTIONS
+    sys = ASTRAL_PERSONA + _persona_overlay(astral_persona) + "\n\n---\n\n" + DRAFT_INVITE_INSTRUCTIONS
     user = (
         f"group: {group_name}\n"
         f"window: {window_blurb}\n"

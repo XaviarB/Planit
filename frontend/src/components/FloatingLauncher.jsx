@@ -27,9 +27,9 @@ const LEGACY_SIDE_KEY = "planit:fab-side";
 //   - "/"            → open the hub (same behaviour as Slack/Discord/etc.),
 //                      ignored while typing in inputs/textareas
 //   - Esc            → close (handled inside the Hub)
-export default function FloatingLauncher({ group, memberId, onGroupRefresh, code }) {
+export default function FloatingLauncher({ group, memberId, onGroupRefresh, code, defaultSide }) {
   const [hubOpen, setHubOpen] = useState(false);
-  const [pos, setPos] = useState(() => loadInitialPos());
+  const [pos, setPos] = useState(() => loadInitialPos(defaultSide));
   const [freePos, setFreePos] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
@@ -332,7 +332,7 @@ function snapToNearestWall(x, y) {
   return { side: winner, offset };
 }
 
-function loadInitialPos() {
+function loadInitialPos(defaultSide) {
   if (typeof window === "undefined") return { side: "right", offset: 0.55 };
   try {
     const raw = localStorage.getItem(POS_KEY);
@@ -351,6 +351,12 @@ function loadInitialPos() {
   const legacySide = localStorage.getItem(LEGACY_SIDE_KEY);
   if (Number.isFinite(legacyY) && (legacySide === "left" || legacySide === "right")) {
     return { side: legacySide, offset: Math.max(0.04, Math.min(0.96, legacyY)) };
+  }
+  // No stored position yet — honour the per-member default if supplied
+  // (set on the Customize → Personal tab).
+  const validSides = ["top", "right", "bottom", "left"];
+  if (defaultSide && validSides.includes(defaultSide)) {
+    return { side: defaultSide, offset: 0.55 };
   }
   return { side: "right", offset: 0.55 };
 }

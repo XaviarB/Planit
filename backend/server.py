@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import random
+import re
 import string
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
@@ -91,6 +92,17 @@ class BusyTemplate(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class MemberPrefs(BaseModel):
+    """Per-member personal preferences. Persists to the member doc so they
+    follow the user across devices (and roundtrip cleanly through the
+    /members/{id}/prefs endpoint)."""
+    color_hex: Optional[str] = None    # user-chosen avatar override
+    fab_side: str = "right"            # "left" | "right" | "top" | "bottom"
+    theme: str = "auto"                # "light" | "dark" | "auto"
+    compact: bool = False              # tighter layout
+    hidden_panels: List[str] = []      # subset of: "hangouts" | "share" | "stats"
+
+
 class Member(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -104,6 +116,10 @@ class Member(BaseModel):
     # older documents continue to load.
     calendars: List[MemberCalendar] = []
     templates: List[BusyTemplate] = []
+    # Personal customization (FAB position, theme, hidden panels, etc.).
+    # Defaults to the canonical Planit defaults so legacy members render
+    # identically.
+    prefs: MemberPrefs = Field(default_factory=MemberPrefs)
     joined_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -157,6 +173,41 @@ class RemixDefaults(BaseModel):
     hint: Optional[str] = None
 
 
+# ---------- Customization sub-models (Phase 5) ---------- #
+
+class Branding(BaseModel):
+    """Group-wide visual identity. Re-skins the Group page only — the Landing
+    page intentionally stays on the global Planit palette so newcomers always
+    see the canonical brand."""
+    accent_hex: str = "#0f172a"        # main ink/accent color
+    gradient_from: str = "#fef9e7"     # pastel yellow
+    gradient_to: str = "#d1f2eb"       # pastel mint
+    emoji: str = "🪐"                   # group sigil shown in the topbar
+    theme_variant: str = "default"     # "default" | "noir" | "candy" | "forest" | "ocean"
+    default_view: str = "dates"        # "dates" | "members"
+
+
+class Locale(BaseModel):
+    """Group-wide time + locale conventions. The frontend reads these to
+    drive the editor / heatmap defaults."""
+    timezone: str = "UTC"              # IANA, e.g. "America/New_York"
+    week_start: str = "mon"            # "mon" | "sun"
+    time_format: str = "12h"           # "12h" | "24h"
+    day_start_hour: int = 0            # 0-23 — first hour shown in the editor
+    day_end_hour: int = 23             # 1-24 — last hour shown
+    slot_minutes: int = 60             # 15 | 30 | 60 — default precision
+
+
+class AstralPersona(BaseModel):
+    """Tunes how Astral talks to this crew. Folded into the suggest /
+    draft-invite prompts on the server side."""
+    display_name: str = "astral"       # rename the bot for this group
+    tone: str = "edgy"                 # "edgy" | "warm" | "minimal" | "hype"
+    lowercase: bool = True             # keep lowercase persona on (default)
+    emoji_on: bool = True              # allow emojis in output
+    default_location: Optional[str] = None  # falls back to group.location
+
+
 class Group(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     code: str
@@ -176,6 +227,13 @@ class Group(BaseModel):
     # Recurring schedule mode — "none" (default, calendar-week) or "weekly"
     # / "biweekly" (treats the heatmap as a recurring weekday cycle).
     recurrence_kind: str = "none"
+    # Phase-5 customization — branding (accent, gradient, emoji, theme),
+    # locale (timezone, week-start, slot-precision), and Astral's persona
+    # (display name, tone, emoji on/off). Defaults reproduce the original
+    # Planit look so old groups continue to render unchanged.
+    branding: Branding = Field(default_factory=Branding)
+    locale: Locale = Field(default_factory=Locale)
+    astral_persona: AstralPersona = Field(default_factory=AstralPersona)
     heat_colors: List[str] = Field(default_factory=lambda: [
         "#1f0500",  # 0 free  — ember black (darkest)
         "#dc2626",  # 1 (a few) — deep neon red
@@ -375,6 +433,17 @@ async def get_group(code: str):
         g["heat_colors"] = [
             "#1f0500", "#dc2626", "#fb923c", "#fcd34d", "#fffbeb",
         ]
+    # Phase-5 customization backfills — guarantee old groups have these
+    # objects on the wire so the frontend can read defaults safely.
+    if not g.get("branding"):
+        g["branding"] = Branding().model_dump()
+    if not g.get("locale"):
+        g["locale"] = Locale().model_dump()
+    if not g.get("astral_persona"):
+        g["astral_persona"] = AstralPersona().model_dump()
+    for m in (g.get("members") or []):
+        if not m.get("prefs"):
+            m["prefs"] = MemberPrefs().model_dump()
     return g
 
 
@@ -505,6 +574,16 @@ async def astral_suggest(code: str, req: AstralSuggestReq):
     members_blurb = ", ".join(parts) if parts else None
 
     location = (req.location_override or g.get("location") or "").strip() or None
+    # Phase-5 — fold the group's customised AstralPersona into the prompt so
+    # the bot's tone, name, lowercase rule and emoji preference all carry
+    # through to suggest_hangouts. Falls back to default persona for old groups.
+    persona = g.get("astral_persona") or AstralPersona().model_dump()
+    # If the persona has a default_location and the request didn't override,
+    # prefer that over the group base — lets the customise tab steer area.
+    if not location:
+        loc_override = (persona.get("default_location") or "").strip()
+        if loc_override:
+            location = loc_override
 
     out = await suggest_hangouts(
         window_blurb=req.window_blurb or "open window",
@@ -516,6 +595,7 @@ async def astral_suggest(code: str, req: AstralSuggestReq):
         previous_cards=req.previous_cards,
         remix_presets=req.remix_presets,
         remix_hint=req.remix_hint,
+        astral_persona=persona,
     )
     out["used_location"] = location
     out["participant_count"] = member_count
@@ -636,6 +716,225 @@ async def update_recurrence(code: str, req: UpdateRecurrenceReq):
 
 
 # --------------------------------------------------------------------------- #
+# Customization (Phase 5) — branding · locale · astral persona · member prefs #
+# Anyone in the group can edit the group-wide settings; permission is         #
+# enforced as "membership" (the frontend only surfaces these when the user    #
+# has joined). Per-member prefs are scoped by member_id in the URL.           #
+# --------------------------------------------------------------------------- #
+
+# ---- request models ----
+
+class UpdateBrandingReq(BaseModel):
+    accent_hex: Optional[str] = None
+    gradient_from: Optional[str] = None
+    gradient_to: Optional[str] = None
+    emoji: Optional[str] = None
+    theme_variant: Optional[str] = None
+    default_view: Optional[str] = None
+
+
+class UpdateLocaleReq(BaseModel):
+    timezone: Optional[str] = None
+    week_start: Optional[str] = None
+    time_format: Optional[str] = None
+    day_start_hour: Optional[int] = None
+    day_end_hour: Optional[int] = None
+    slot_minutes: Optional[int] = None
+
+
+class UpdateAstralPersonaReq(BaseModel):
+    display_name: Optional[str] = None
+    tone: Optional[str] = None
+    lowercase: Optional[bool] = None
+    emoji_on: Optional[bool] = None
+    default_location: Optional[str] = None
+
+
+class UpdateMemberPrefsReq(BaseModel):
+    color_hex: Optional[str] = None
+    fab_side: Optional[str] = None
+    theme: Optional[str] = None
+    compact: Optional[bool] = None
+    hidden_panels: Optional[List[str]] = None
+
+
+# ---- helpers ----
+
+_HEX_RE = re.compile(r"^#?[0-9a-fA-F]{6}$")
+ALLOWED_THEME_VARIANTS = {"default", "noir", "candy", "forest", "ocean"}
+ALLOWED_DEFAULT_VIEWS = {"dates", "members"}
+ALLOWED_WEEK_STARTS = {"mon", "sun"}
+ALLOWED_TIME_FORMATS = {"12h", "24h"}
+ALLOWED_TONES = {"edgy", "warm", "minimal", "hype"}
+ALLOWED_FAB_SIDES = {"left", "right", "top", "bottom"}
+ALLOWED_THEMES = {"light", "dark", "auto"}
+ALLOWED_HIDDEN_PANELS = {"hangouts", "share", "stats"}
+
+
+def _norm_hex(s: Optional[str], default: str) -> str:
+    """Coerce '#abc123' / 'abc123' to '#abc123'. Returns default on bad input."""
+    if not s:
+        return default
+    s = s.strip()
+    if not _HEX_RE.match(s):
+        return default
+    return s if s.startswith("#") else "#" + s
+
+
+# ---- branding ----
+
+@api_router.put("/groups/{code}/branding")
+async def update_branding(code: str, req: UpdateBrandingReq):
+    """Update the group's visual identity. Only fields supplied are touched —
+    omitting a field leaves it unchanged. Invalid colors / variants are
+    silently coerced to safe defaults."""
+    g = await find_group(code)
+    current = Branding(**(g.get("branding") or {}))
+    update: Dict[str, str] = {}
+
+    if req.accent_hex is not None:
+        update["branding.accent_hex"] = _norm_hex(req.accent_hex, current.accent_hex)
+    if req.gradient_from is not None:
+        update["branding.gradient_from"] = _norm_hex(req.gradient_from, current.gradient_from)
+    if req.gradient_to is not None:
+        update["branding.gradient_to"] = _norm_hex(req.gradient_to, current.gradient_to)
+    if req.emoji is not None:
+        # Just trim and cap to a reasonable length so the topbar never blows up.
+        update["branding.emoji"] = (req.emoji or "").strip()[:8] or current.emoji
+    if req.theme_variant is not None:
+        v = (req.theme_variant or "").strip().lower()
+        update["branding.theme_variant"] = v if v in ALLOWED_THEME_VARIANTS else current.theme_variant
+    if req.default_view is not None:
+        v = (req.default_view or "").strip().lower()
+        update["branding.default_view"] = v if v in ALLOWED_DEFAULT_VIEWS else current.default_view
+
+    if update:
+        await db.groups.update_one({"code": code.upper()}, {"$set": update})
+
+    g2 = await find_group(code)
+    return {"ok": True, "branding": g2.get("branding") or current.model_dump()}
+
+
+# ---- locale ----
+
+@api_router.put("/groups/{code}/locale")
+async def update_locale(code: str, req: UpdateLocaleReq):
+    """Update group-wide locale settings (timezone, week-start, time-format,
+    day window, slot precision)."""
+    g = await find_group(code)
+    current = Locale(**(g.get("locale") or {}))
+    update: Dict = {}
+
+    if req.timezone is not None:
+        # Lightly validate — accept anything that looks like an IANA-ish tz
+        # so we don't ship pytz/zoneinfo lookups across cold starts.
+        tz = (req.timezone or "").strip()[:64] or current.timezone
+        update["locale.timezone"] = tz
+    if req.week_start is not None:
+        v = (req.week_start or "").strip().lower()
+        update["locale.week_start"] = v if v in ALLOWED_WEEK_STARTS else current.week_start
+    if req.time_format is not None:
+        v = (req.time_format or "").strip().lower()
+        update["locale.time_format"] = v if v in ALLOWED_TIME_FORMATS else current.time_format
+    if req.day_start_hour is not None:
+        h = req.day_start_hour
+        update["locale.day_start_hour"] = h if isinstance(h, int) and 0 <= h <= 23 else current.day_start_hour
+    if req.day_end_hour is not None:
+        h = req.day_end_hour
+        update["locale.day_end_hour"] = h if isinstance(h, int) and 1 <= h <= 24 else current.day_end_hour
+    if req.slot_minutes is not None:
+        m = req.slot_minutes
+        update["locale.slot_minutes"] = m if m in (15, 30, 60) else current.slot_minutes
+
+    # Cross-field sanity: end must be > start.
+    new_start = update.get("locale.day_start_hour", current.day_start_hour)
+    new_end = update.get("locale.day_end_hour", current.day_end_hour)
+    if new_end <= new_start:
+        # Reject silently — keep previous values to avoid wedging the heatmap.
+        update.pop("locale.day_start_hour", None)
+        update.pop("locale.day_end_hour", None)
+
+    if update:
+        await db.groups.update_one({"code": code.upper()}, {"$set": update})
+
+    g2 = await find_group(code)
+    return {"ok": True, "locale": g2.get("locale") or current.model_dump()}
+
+
+# ---- astral persona ----
+
+@api_router.put("/groups/{code}/astral-persona")
+async def update_astral_persona(code: str, req: UpdateAstralPersonaReq):
+    """Tune Astral's voice for this crew. Folded into the suggest/draft-invite
+    prompts at runtime."""
+    g = await find_group(code)
+    current = AstralPersona(**(g.get("astral_persona") or {}))
+    update: Dict = {}
+
+    if req.display_name is not None:
+        name = (req.display_name or "").strip()[:32] or current.display_name
+        update["astral_persona.display_name"] = name
+    if req.tone is not None:
+        v = (req.tone or "").strip().lower()
+        update["astral_persona.tone"] = v if v in ALLOWED_TONES else current.tone
+    if req.lowercase is not None:
+        update["astral_persona.lowercase"] = bool(req.lowercase)
+    if req.emoji_on is not None:
+        update["astral_persona.emoji_on"] = bool(req.emoji_on)
+    if req.default_location is not None:
+        loc = (req.default_location or "").strip()
+        update["astral_persona.default_location"] = loc or None
+
+    if update:
+        await db.groups.update_one({"code": code.upper()}, {"$set": update})
+
+    g2 = await find_group(code)
+    return {"ok": True, "astral_persona": g2.get("astral_persona") or current.model_dump()}
+
+
+# ---- member prefs ----
+
+@api_router.put("/groups/{code}/members/{member_id}/prefs")
+async def update_member_prefs(code: str, member_id: str, req: UpdateMemberPrefsReq):
+    """Personal preferences — FAB side, theme, compact mode, hidden panels.
+    Stored on the member doc so they survive across devices."""
+    g = await find_group(code)
+    m = next((x for x in (g.get("members") or []) if x.get("id") == member_id), None)
+    if not m:
+        raise HTTPException(status_code=404, detail="Member not found")
+    current = MemberPrefs(**(m.get("prefs") or {}))
+    update: Dict = {}
+
+    if req.color_hex is not None:
+        # Empty string clears the override.
+        if not req.color_hex.strip():
+            update["members.$.prefs.color_hex"] = None
+        else:
+            update["members.$.prefs.color_hex"] = _norm_hex(req.color_hex, current.color_hex or "#1ABC9C")
+    if req.fab_side is not None:
+        v = (req.fab_side or "").strip().lower()
+        update["members.$.prefs.fab_side"] = v if v in ALLOWED_FAB_SIDES else current.fab_side
+    if req.theme is not None:
+        v = (req.theme or "").strip().lower()
+        update["members.$.prefs.theme"] = v if v in ALLOWED_THEMES else current.theme
+    if req.compact is not None:
+        update["members.$.prefs.compact"] = bool(req.compact)
+    if req.hidden_panels is not None:
+        cleaned = [p for p in (req.hidden_panels or []) if isinstance(p, str) and p in ALLOWED_HIDDEN_PANELS]
+        update["members.$.prefs.hidden_panels"] = cleaned
+
+    if update:
+        await db.groups.update_one(
+            {"code": code.upper(), "members.id": member_id},
+            {"$set": update},
+        )
+
+    g2 = await find_group(code)
+    m2 = next((x for x in (g2.get("members") or []) if x.get("id") == member_id), None)
+    return {"ok": True, "prefs": (m2 or {}).get("prefs") or current.model_dump()}
+
+
+# --------------------------------------------------------------------------- #
 # Open Graph preview image — for rich link unfurls in iMessage/Slack/Discord  #
 # --------------------------------------------------------------------------- #
 
@@ -744,6 +1043,7 @@ async def astral_draft_invite(code: str, req: AstralDraftInviteReq):
         suggestion=req.suggestion or {},
         group_name=g.get("name") or "the group",
         window_blurb=req.window_blurb or "later",
+        astral_persona=g.get("astral_persona") or AstralPersona().model_dump(),
     )
     return {"message": msg}
 

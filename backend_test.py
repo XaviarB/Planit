@@ -1,702 +1,470 @@
 #!/usr/bin/env python3
 """
-Backend test suite for Planit Phase 2 - NEW features only:
-1. Astral remix mode (POST /api/groups/{code}/astral/suggest with remix fields)
-2. Single-event .ics export (GET /api/groups/{code}/hangouts/{hid}/event.ics)
+Phase 5 Customization Backend Tests
+Tests the 5 new customization endpoints added in Phase 5.
 """
-import asyncio
-import os
+
+import requests
+import json
 import sys
-import httpx
-from datetime import datetime, timezone, timedelta
 
-# Read backend URL from frontend/.env
-BACKEND_URL = None
-try:
-    with open('/app/frontend/.env', 'r') as f:
-        for line in f:
-            if line.startswith('REACT_APP_BACKEND_URL='):
-                BACKEND_URL = line.split('=', 1)[1].strip()
-                break
-except Exception as e:
-    print(f"❌ Failed to read BACKEND_URL from /app/frontend/.env: {e}")
-    sys.exit(1)
+# Backend URL from frontend/.env
+BASE_URL = "https://flex-app-builder.preview.emergentagent.com/api"
 
-if not BACKEND_URL:
-    print("❌ REACT_APP_BACKEND_URL not found in /app/frontend/.env")
-    sys.exit(1)
+def log(msg):
+    print(f"[TEST] {msg}")
 
-API_BASE = f"{BACKEND_URL}/api"
-print(f"🔗 Testing against: {API_BASE}\n")
-
-# Test group - can use existing or create new
-SMOKE_TEST_GROUP = "N7UVGL"  # Weekend Warriors, Brooklyn, NY
-
-
-class TestResults:
-    def __init__(self):
-        self.passed = []
-        self.failed = []
-        self.warnings = []
+def test_phase5_customization():
+    """Test all Phase 5 customization endpoints"""
     
-    def add_pass(self, test_name: str, details: str = ""):
-        self.passed.append((test_name, details))
-        print(f"✅ {test_name}")
-        if details:
-            print(f"   {details}")
+    log("=" * 80)
+    log("PHASE 5 CUSTOMIZATION BACKEND TESTS")
+    log("=" * 80)
     
-    def add_fail(self, test_name: str, reason: str):
-        self.failed.append((test_name, reason))
-        print(f"❌ {test_name}")
-        print(f"   REASON: {reason}")
+    # Create a fresh test group
+    log("\n[SETUP] Creating fresh test group...")
+    create_resp = requests.post(
+        f"{BASE_URL}/groups",
+        json={
+            "group_name": "Phase5Test",
+            "creator_name": "Alex",
+            "location": "NYC"
+        },
+        timeout=30
+    )
+    assert create_resp.status_code == 200, f"Failed to create group: {create_resp.status_code}"
+    response_data = create_resp.json()
+    group_data = response_data.get("group", response_data)  # Handle both nested and flat response
+    code = group_data["code"]
+    creator_id = group_data["members"][0]["id"]
+    log(f"✓ Created group {code} with creator {creator_id}")
     
-    def add_warning(self, test_name: str, message: str):
-        self.warnings.append((test_name, message))
-        print(f"⚠️  {test_name}")
-        print(f"   {message}")
+    # ========================================================================
+    # TEST 1: PUT /api/groups/{code}/branding
+    # ========================================================================
+    log("\n" + "=" * 80)
+    log("TEST 1: PUT /api/groups/{code}/branding")
+    log("=" * 80)
     
-    def summary(self):
-        print("\n" + "="*80)
-        print("TEST SUMMARY")
-        print("="*80)
-        print(f"✅ Passed: {len(self.passed)}")
-        print(f"❌ Failed: {len(self.failed)}")
-        print(f"⚠️  Warnings: {len(self.warnings)}")
-        
-        if self.failed:
-            print("\n❌ FAILED TESTS:")
-            for name, reason in self.failed:
-                print(f"  - {name}")
-                print(f"    {reason}")
-        
-        if self.warnings:
-            print("\n⚠️  WARNINGS:")
-            for name, msg in self.warnings:
-                print(f"  - {name}: {msg}")
-        
-        return len(self.failed) == 0
-
-
-results = TestResults()
-
-
-async def test_astral_remix_mode():
-    """Test suite for Astral remix mode functionality"""
-    print("\n" + "="*80)
-    print("TEST SUITE 1: ASTRAL REMIX MODE")
-    print("="*80 + "\n")
+    # 1a. Send all fields
+    log("\n[1a] Testing full branding payload...")
+    branding_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/branding",
+        json={
+            "accent_hex": "#ff5500",
+            "gradient_from": "#ffeedd",
+            "gradient_to": "#ccddee",
+            "emoji": "🎨",
+            "theme_variant": "noir",
+            "default_view": "members"
+        },
+        timeout=30
+    )
+    assert branding_resp.status_code == 200, f"Branding update failed: {branding_resp.status_code}"
+    branding_data = branding_resp.json()
+    assert branding_data["ok"] == True
+    assert branding_data["branding"]["accent_hex"] == "#ff5500"
+    assert branding_data["branding"]["gradient_from"] == "#ffeedd"
+    assert branding_data["branding"]["gradient_to"] == "#ccddee"
+    assert branding_data["branding"]["emoji"] == "🎨"
+    assert branding_data["branding"]["theme_variant"] == "noir"
+    assert branding_data["branding"]["default_view"] == "members"
+    log("✓ Full branding payload accepted and returned correctly")
     
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        # Verify group exists
-        try:
-            resp = await client.get(f"{API_BASE}/groups/{SMOKE_TEST_GROUP}")
-            if resp.status_code != 200:
-                results.add_fail(
-                    "Remix: Group verification",
-                    f"Group {SMOKE_TEST_GROUP} not found (status {resp.status_code})"
-                )
-                return
-            group = resp.json()
-            results.add_pass("Remix: Group verification", f"Group '{group.get('name')}' found")
-        except Exception as e:
-            results.add_fail("Remix: Group verification", f"Exception: {e}")
-            return
-        
-        # Test 1a: Plain suggest call (no remix fields) - baseline
-        print("\n📋 Test 1a: Plain suggest (no remix fields)")
-        try:
-            payload = {
-                "window_blurb": "Saturday 7-11pm"
-            }
-            resp = await client.post(
-                f"{API_BASE}/groups/{SMOKE_TEST_GROUP}/astral/suggest",
-                json=payload,
-                timeout=45.0
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "Remix 1a: Plain suggest",
-                    f"Expected 200, got {resp.status_code}: {resp.text[:200]}"
-                )
-                return
-            
-            data = resp.json()
-            
-            # Verify response structure
-            if "cards" not in data:
-                results.add_fail("Remix 1a: Plain suggest", "Missing 'cards' in response")
-                return
-            
-            if "was_remix" not in data:
-                results.add_fail("Remix 1a: Plain suggest", "Missing 'was_remix' in response")
-                return
-            
-            if data["was_remix"] != False:
-                results.add_fail(
-                    "Remix 1a: Plain suggest",
-                    f"Expected was_remix=false, got {data['was_remix']}"
-                )
-                return
-            
-            cards = data["cards"]
-            if not isinstance(cards, list) or len(cards) > 3:
-                results.add_fail(
-                    "Remix 1a: Plain suggest",
-                    f"Expected cards list with ≤3 items, got {len(cards) if isinstance(cards, list) else 'not a list'}"
-                )
-                return
-            
-            if len(cards) == 0:
-                results.add_warning(
-                    "Remix 1a: Plain suggest",
-                    "Gemini returned 0 cards (may be API issue, not code bug)"
-                )
-            
-            # Verify card structure
-            for i, card in enumerate(cards):
-                required_fields = ["venue", "category", "neighborhood", "vibe_tags", "buzz", 
-                                 "rating", "review_count_approx", "price_level", "what_to_order",
-                                 "astral_take", "warnings", "good_for", "verify_links"]
-                missing = [f for f in required_fields if f not in card]
-                if missing:
-                    results.add_fail(
-                        "Remix 1a: Plain suggest",
-                        f"Card {i} missing fields: {missing}"
-                    )
-                    return
-            
-            # Store cards for next test
-            baseline_cards = cards
-            baseline_venues = [c["venue"] for c in cards]
-            
-            results.add_pass(
-                "Remix 1a: Plain suggest",
-                f"was_remix=false, {len(cards)} cards returned, all fields present"
-            )
-            
-        except httpx.TimeoutException:
-            results.add_fail("Remix 1a: Plain suggest", "Request timeout (>45s)")
-            return
-        except Exception as e:
-            results.add_fail("Remix 1a: Plain suggest", f"Exception: {e}")
-            return
-        
-        # Test 1b: Remix with previous_cards + remix_presets
-        print("\n📋 Test 1b: Remix with previous_cards + remix_presets")
-        try:
-            payload = {
-                "window_blurb": "Saturday 7-11pm",
-                "previous_cards": baseline_cards,
-                "remix_presets": ["cheaper", "different_neighborhood"]
-            }
-            resp = await client.post(
-                f"{API_BASE}/groups/{SMOKE_TEST_GROUP}/astral/suggest",
-                json=payload,
-                timeout=45.0
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "Remix 1b: With presets",
-                    f"Expected 200, got {resp.status_code}: {resp.text[:200]}"
-                )
-                return
-            
-            data = resp.json()
-            
-            if data.get("was_remix") != True:
-                results.add_fail(
-                    "Remix 1b: With presets",
-                    f"Expected was_remix=true, got {data.get('was_remix')}"
-                )
-                return
-            
-            remix_cards = data.get("cards", [])
-            remix_venues = [c["venue"] for c in remix_cards]
-            
-            # Verify no venue names from baseline appear in remix
-            repeated = [v for v in remix_venues if v in baseline_venues]
-            if repeated:
-                results.add_fail(
-                    "Remix 1b: With presets",
-                    f"Venues repeated from previous cards: {repeated}"
-                )
-                return
-            
-            results.add_pass(
-                "Remix 1b: With presets",
-                f"was_remix=true, {len(remix_cards)} new cards, no repeated venues"
-            )
-            
-        except httpx.TimeoutException:
-            results.add_fail("Remix 1b: With presets", "Request timeout (>45s)")
-            return
-        except Exception as e:
-            results.add_fail("Remix 1b: With presets", f"Exception: {e}")
-            return
-        
-        # Test 1c: Remix with only remix_hint (food-focused)
-        print("\n📋 Test 1c: Remix with remix_hint only (food focus)")
-        try:
-            payload = {
-                "window_blurb": "Saturday 7-11pm",
-                "previous_cards": baseline_cards,
-                "remix_hint": "we want tacos no bars"
-            }
-            resp = await client.post(
-                f"{API_BASE}/groups/{SMOKE_TEST_GROUP}/astral/suggest",
-                json=payload,
-                timeout=45.0
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "Remix 1c: With hint",
-                    f"Expected 200, got {resp.status_code}: {resp.text[:200]}"
-                )
-                return
-            
-            data = resp.json()
-            
-            if data.get("was_remix") != True:
-                results.add_fail(
-                    "Remix 1c: With hint",
-                    f"Expected was_remix=true, got {data.get('was_remix')}"
-                )
-                return
-            
-            hint_cards = data.get("cards", [])
-            
-            # Check if at least 1 card is food-related
-            food_categories = ["restaurant", "cafe", "other"]
-            food_cards = [c for c in hint_cards if c.get("category", "").lower() in food_categories]
-            
-            if len(food_cards) == 0:
-                results.add_warning(
-                    "Remix 1c: With hint",
-                    "No food-related cards found (expected at least 1 for 'tacos' hint)"
-                )
-            else:
-                results.add_pass(
-                    "Remix 1c: With hint",
-                    f"was_remix=true, {len(food_cards)}/{len(hint_cards)} cards are food-related"
-                )
-            
-        except httpx.TimeoutException:
-            results.add_fail("Remix 1c: With hint", "Request timeout (>45s)")
-            return
-        except Exception as e:
-            results.add_fail("Remix 1c: With hint", f"Exception: {e}")
-            return
-        
-        # Test 1d: Garbage in remix_presets (should be filtered)
-        print("\n📋 Test 1d: Garbage remix_presets (should filter)")
-        try:
-            payload = {
-                "window_blurb": "Saturday 7-11pm",
-                "remix_presets": ["bogus_preset", "cheaper", "invalid_chip"]
-            }
-            resp = await client.post(
-                f"{API_BASE}/groups/{SMOKE_TEST_GROUP}/astral/suggest",
-                json=payload,
-                timeout=45.0
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "Remix 1d: Garbage presets",
-                    f"Expected 200, got {resp.status_code}: {resp.text[:200]}"
-                )
-                return
-            
-            data = resp.json()
-            
-            # Should still return was_remix=true because "cheaper" is valid
-            if data.get("was_remix") != True:
-                results.add_fail(
-                    "Remix 1d: Garbage presets",
-                    f"Expected was_remix=true (valid preset 'cheaper' present), got {data.get('was_remix')}"
-                )
-                return
-            
-            results.add_pass(
-                "Remix 1d: Garbage presets",
-                "Invalid presets silently filtered, valid preset applied, was_remix=true"
-            )
-            
-        except httpx.TimeoutException:
-            results.add_fail("Remix 1d: Garbage presets", "Request timeout (>45s)")
-            return
-        except Exception as e:
-            results.add_fail("Remix 1d: Garbage presets", f"Exception: {e}")
-            return
-        
-        # Test 1e: Empty remix fields (should be non-remix)
-        print("\n📋 Test 1e: Empty remix fields (should be non-remix)")
-        try:
-            payload = {
-                "window_blurb": "Saturday 7-11pm",
-                "previous_cards": [],
-                "remix_presets": [],
-                "remix_hint": ""
-            }
-            resp = await client.post(
-                f"{API_BASE}/groups/{SMOKE_TEST_GROUP}/astral/suggest",
-                json=payload,
-                timeout=45.0
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "Remix 1e: Empty fields",
-                    f"Expected 200, got {resp.status_code}: {resp.text[:200]}"
-                )
-                return
-            
-            data = resp.json()
-            
-            if data.get("was_remix") != False:
-                results.add_fail(
-                    "Remix 1e: Empty fields",
-                    f"Expected was_remix=false (all remix fields empty), got {data.get('was_remix')}"
-                )
-                return
-            
-            results.add_pass(
-                "Remix 1e: Empty fields",
-                "Empty remix fields treated as non-remix, was_remix=false"
-            )
-            
-        except httpx.TimeoutException:
-            results.add_fail("Remix 1e: Empty fields", "Request timeout (>45s)")
-            return
-        except Exception as e:
-            results.add_fail("Remix 1e: Empty fields", f"Exception: {e}")
-            return
-
-
-async def test_single_event_ics():
-    """Test suite for single-event .ics export functionality"""
-    print("\n" + "="*80)
-    print("TEST SUITE 2: SINGLE-EVENT .ICS EXPORT")
-    print("="*80 + "\n")
+    # 1b. Partial update (only accent_hex)
+    log("\n[1b] Testing partial branding update (only accent_hex)...")
+    partial_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/branding",
+        json={"accent_hex": "#00ff00"},
+        timeout=30
+    )
+    assert partial_resp.status_code == 200
+    partial_data = partial_resp.json()
+    assert partial_data["branding"]["accent_hex"] == "#00ff00"
+    # Other fields should remain unchanged from 1a
+    assert partial_data["branding"]["emoji"] == "🎨"
+    assert partial_data["branding"]["theme_variant"] == "noir"
+    log("✓ Partial update preserved other fields")
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Create a test group for hangout testing
-        print("📋 Setup: Creating test group")
-        try:
-            resp = await client.post(
-                f"{API_BASE}/groups",
-                json={
-                    "group_name": "ICS Test Group",
-                    "creator_name": "Test User",
-                    "location": "Brooklyn, NY"
-                }
-            )
-            if resp.status_code != 200:
-                results.add_fail(
-                    "ICS Setup: Create group",
-                    f"Failed to create test group: {resp.status_code}"
-                )
-                return
-            
-            group_data = resp.json()
-            test_group_code = group_data["group"]["code"]
-            results.add_pass("ICS Setup: Create group", f"Test group {test_group_code} created")
-            
-        except Exception as e:
-            results.add_fail("ICS Setup: Create group", f"Exception: {e}")
-            return
-        
-        # Create a tentative hangout
-        print("\n📋 Setup: Creating tentative hangout")
-        try:
-            start_time = datetime.now(timezone.utc) + timedelta(days=7)
-            end_time = start_time + timedelta(hours=3)
-            
-            resp = await client.post(
-                f"{API_BASE}/groups/{test_group_code}/hangouts",
-                json={
-                    "title": "Test Hangout - Tentative",
-                    "start_iso": start_time.isoformat(),
-                    "end_iso": end_time.isoformat(),
-                    "status": "tentative",
-                    "location_name": "Test Venue",
-                    "address": "123 Test St, Brooklyn, NY"
-                }
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "ICS Setup: Create hangout",
-                    f"Failed to create hangout: {resp.status_code}"
-                )
-                return
-            
-            hangout_data = resp.json()
-            tentative_hangout_id = hangout_data["id"]
-            results.add_pass("ICS Setup: Create hangout", f"Tentative hangout {tentative_hangout_id} created")
-            
-        except Exception as e:
-            results.add_fail("ICS Setup: Create hangout", f"Exception: {e}")
-            return
-        
-        # Test 2a: GET .ics returns 200 with correct headers
-        print("\n📋 Test 2a: GET .ics returns 200 with correct headers")
-        try:
-            resp = await client.get(
-                f"{API_BASE}/groups/{test_group_code}/hangouts/{tentative_hangout_id}/event.ics"
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "ICS 2a: Basic GET",
-                    f"Expected 200, got {resp.status_code}"
-                )
-                return
-            
-            # Check Content-Type
-            content_type = resp.headers.get("content-type", "")
-            if not content_type.startswith("text/calendar"):
-                results.add_fail(
-                    "ICS 2a: Basic GET",
-                    f"Expected Content-Type 'text/calendar', got '{content_type}'"
-                )
-                return
-            
-            # Check Content-Disposition
-            content_disp = resp.headers.get("content-disposition", "")
-            if not content_disp.startswith("attachment"):
-                results.add_fail(
-                    "ICS 2a: Basic GET",
-                    f"Expected Content-Disposition 'attachment', got '{content_disp}'"
-                )
-                return
-            
-            if ".ics" not in content_disp:
-                results.add_fail(
-                    "ICS 2a: Basic GET",
-                    f"Expected .ics filename in Content-Disposition, got '{content_disp}'"
-                )
-                return
-            
-            # Store body for further tests
-            ics_body = resp.text
-            
-            results.add_pass(
-                "ICS 2a: Basic GET",
-                f"200 OK, Content-Type: {content_type}, Content-Disposition: attachment with .ics"
-            )
-            
-        except Exception as e:
-            results.add_fail("ICS 2a: Basic GET", f"Exception: {e}")
-            return
-        
-        # Test 2b: Validate iCalendar structure
-        print("\n📋 Test 2b: Validate iCalendar structure")
-        try:
-            if "BEGIN:VCALENDAR" not in ics_body:
-                results.add_fail("ICS 2b: Structure", "Missing 'BEGIN:VCALENDAR'")
-                return
-            
-            if "END:VCALENDAR" not in ics_body:
-                results.add_fail("ICS 2b: Structure", "Missing 'END:VCALENDAR'")
-                return
-            
-            if "BEGIN:VEVENT" not in ics_body:
-                results.add_fail("ICS 2b: Structure", "Missing 'BEGIN:VEVENT'")
-                return
-            
-            if "END:VEVENT" not in ics_body:
-                results.add_fail("ICS 2b: Structure", "Missing 'END:VEVENT'")
-                return
-            
-            # Count VEVENTs (should be exactly 1)
-            vevent_count = ics_body.count("BEGIN:VEVENT")
-            if vevent_count != 1:
-                results.add_fail(
-                    "ICS 2b: Structure",
-                    f"Expected exactly 1 VEVENT, found {vevent_count}"
-                )
-                return
-            
-            # Check required VEVENT fields
-            required_fields = ["DTSTART", "DTEND", "SUMMARY", "UID"]
-            missing_fields = [f for f in required_fields if f not in ics_body]
-            if missing_fields:
-                results.add_fail(
-                    "ICS 2b: Structure",
-                    f"Missing required VEVENT fields: {missing_fields}"
-                )
-                return
-            
-            results.add_pass(
-                "ICS 2b: Structure",
-                "Valid iCalendar with 1 VEVENT containing all required fields"
-            )
-            
-        except Exception as e:
-            results.add_fail("ICS 2b: Structure", f"Exception: {e}")
-            return
-        
-        # Test 2c: Verify tentative status
-        print("\n📋 Test 2c: Verify tentative status")
-        try:
-            if "[tentative]" not in ics_body.lower():
-                results.add_fail(
-                    "ICS 2c: Tentative status",
-                    "SUMMARY should contain '[tentative]' prefix for tentative hangout"
-                )
-                return
-            
-            if "STATUS:TENTATIVE" not in ics_body:
-                results.add_fail(
-                    "ICS 2c: Tentative status",
-                    "Missing 'STATUS:TENTATIVE' for tentative hangout"
-                )
-                return
-            
-            if "Test Hangout - Tentative" not in ics_body:
-                results.add_warning(
-                    "ICS 2c: Tentative status",
-                    "Hangout title not found in SUMMARY (may be formatted differently)"
-                )
-            
-            results.add_pass(
-                "ICS 2c: Tentative status",
-                "SUMMARY has '[tentative]' prefix and STATUS:TENTATIVE present"
-            )
-            
-        except Exception as e:
-            results.add_fail("ICS 2c: Tentative status", f"Exception: {e}")
-            return
-        
-        # Test 2d: Lock hangout and verify confirmed status
-        print("\n📋 Test 2d: Lock hangout and verify confirmed status")
-        try:
-            # Update hangout to locked
-            resp = await client.put(
-                f"{API_BASE}/groups/{test_group_code}/hangouts/{tentative_hangout_id}",
-                json={"status": "locked"}
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "ICS 2d: Lock hangout",
-                    f"Failed to lock hangout: {resp.status_code}"
-                )
-                return
-            
-            # Fetch .ics again
-            resp = await client.get(
-                f"{API_BASE}/groups/{test_group_code}/hangouts/{tentative_hangout_id}/event.ics"
-            )
-            
-            if resp.status_code != 200:
-                results.add_fail(
-                    "ICS 2d: Lock hangout",
-                    f"Failed to fetch .ics after lock: {resp.status_code}"
-                )
-                return
-            
-            locked_ics_body = resp.text
-            
-            # Should NOT have [tentative] prefix
-            if "[tentative]" in locked_ics_body.lower():
-                results.add_fail(
-                    "ICS 2d: Lock hangout",
-                    "SUMMARY should NOT contain '[tentative]' prefix for locked hangout"
-                )
-                return
-            
-            # Should have STATUS:CONFIRMED
-            if "STATUS:CONFIRMED" not in locked_ics_body:
-                results.add_fail(
-                    "ICS 2d: Lock hangout",
-                    "Missing 'STATUS:CONFIRMED' for locked hangout"
-                )
-                return
-            
-            results.add_pass(
-                "ICS 2d: Lock hangout",
-                "Locked hangout: no '[tentative]' prefix, STATUS:CONFIRMED present"
-            )
-            
-        except Exception as e:
-            results.add_fail("ICS 2d: Lock hangout", f"Exception: {e}")
-            return
-        
-        # Test 2e: 404 for non-existent group
-        print("\n📋 Test 2e: 404 for non-existent group")
-        try:
-            resp = await client.get(
-                f"{API_BASE}/groups/XXXXXX/hangouts/{tentative_hangout_id}/event.ics"
-            )
-            
-            if resp.status_code != 404:
-                results.add_fail(
-                    "ICS 2e: Non-existent group",
-                    f"Expected 404, got {resp.status_code}"
-                )
-                return
-            
-            results.add_pass("ICS 2e: Non-existent group", "Correctly returns 404")
-            
-        except Exception as e:
-            results.add_fail("ICS 2e: Non-existent group", f"Exception: {e}")
-            return
-        
-        # Test 2f: 404 for non-existent hangout
-        print("\n📋 Test 2f: 404 for non-existent hangout")
-        try:
-            resp = await client.get(
-                f"{API_BASE}/groups/{test_group_code}/hangouts/nonexistent-id/event.ics"
-            )
-            
-            if resp.status_code != 404:
-                results.add_fail(
-                    "ICS 2f: Non-existent hangout",
-                    f"Expected 404, got {resp.status_code}"
-                )
-                return
-            
-            results.add_pass("ICS 2f: Non-existent hangout", "Correctly returns 404")
-            
-        except Exception as e:
-            results.add_fail("ICS 2f: Non-existent hangout", f"Exception: {e}")
-            return
-        
-        # Cleanup: Delete test group
-        print("\n📋 Cleanup: Deleting test group")
-        try:
-            await client.delete(f"{API_BASE}/groups/{test_group_code}")
-            print(f"   Test group {test_group_code} deleted")
-        except Exception as e:
-            print(f"   Warning: Failed to cleanup test group: {e}")
-
-
-async def main():
-    print("="*80)
-    print("PLANIT PHASE 2 - NEW FEATURES BACKEND TEST SUITE")
-    print("="*80)
+    # 1c. Hex without leading # gets normalized
+    log("\n[1c] Testing hex normalization (no leading #)...")
+    hex_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/branding",
+        json={"accent_hex": "aabbcc"},
+        timeout=30
+    )
+    assert hex_resp.status_code == 200
+    hex_data = hex_resp.json()
+    assert hex_data["branding"]["accent_hex"] == "#aabbcc"
+    log("✓ Hex normalized to #aabbcc")
     
-    # Run test suites
-    await test_astral_remix_mode()
-    await test_single_event_ics()
+    # 1d. Bad theme_variant falls back to current value
+    log("\n[1d] Testing invalid theme_variant fallback...")
+    bad_theme_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/branding",
+        json={"theme_variant": "rainbow"},
+        timeout=30
+    )
+    assert bad_theme_resp.status_code == 200
+    bad_theme_data = bad_theme_resp.json()
+    # Should keep "noir" from 1a
+    assert bad_theme_data["branding"]["theme_variant"] == "noir"
+    log("✓ Invalid theme_variant 'rainbow' fell back to 'noir'")
     
-    # Print summary
-    success = results.summary()
+    # 1e. Bad default_view falls back to current value
+    log("\n[1e] Testing invalid default_view fallback...")
+    bad_view_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/branding",
+        json={"default_view": "calendar"},
+        timeout=30
+    )
+    assert bad_view_resp.status_code == 200
+    bad_view_data = bad_view_resp.json()
+    # Should keep "members" from 1a
+    assert bad_view_data["branding"]["default_view"] == "members"
+    log("✓ Invalid default_view 'calendar' fell back to 'members'")
     
-    print("\n" + "="*80)
-    if success:
-        print("🎉 ALL TESTS PASSED")
-    else:
-        print("⚠️  SOME TESTS FAILED - See details above")
-    print("="*80)
+    # 1f. 404 for unknown group code
+    log("\n[1f] Testing 404 for unknown group code...")
+    unknown_resp = requests.put(
+        f"{BASE_URL}/groups/XXXXXX/branding",
+        json={"accent_hex": "#ff0000"},
+        timeout=30
+    )
+    assert unknown_resp.status_code == 404
+    log("✓ Unknown group code returned 404")
     
-    sys.exit(0 if success else 1)
-
+    # ========================================================================
+    # TEST 2: PUT /api/groups/{code}/locale
+    # ========================================================================
+    log("\n" + "=" * 80)
+    log("TEST 2: PUT /api/groups/{code}/locale")
+    log("=" * 80)
+    
+    # 2a. Full payload
+    log("\n[2a] Testing full locale payload...")
+    locale_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/locale",
+        json={
+            "timezone": "America/New_York",
+            "week_start": "sun",
+            "time_format": "24h",
+            "day_start_hour": 8,
+            "day_end_hour": 22,
+            "slot_minutes": 30
+        },
+        timeout=30
+    )
+    assert locale_resp.status_code == 200
+    locale_data = locale_resp.json()
+    assert locale_data["ok"] == True
+    assert locale_data["locale"]["timezone"] == "America/New_York"
+    assert locale_data["locale"]["week_start"] == "sun"
+    assert locale_data["locale"]["time_format"] == "24h"
+    assert locale_data["locale"]["day_start_hour"] == 8
+    assert locale_data["locale"]["day_end_hour"] == 22
+    assert locale_data["locale"]["slot_minutes"] == 30
+    log("✓ Full locale payload accepted and returned correctly")
+    
+    # 2b. Cross-field guard: end <= start should silently reject both hours
+    log("\n[2b] Testing cross-field guard (end <= start)...")
+    guard_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/locale",
+        json={
+            "day_start_hour": 18,
+            "day_end_hour": 9,
+            "time_format": "12h"
+        },
+        timeout=30
+    )
+    assert guard_resp.status_code == 200
+    guard_data = guard_resp.json()
+    # time_format should be applied
+    assert guard_data["locale"]["time_format"] == "12h"
+    # But hours should remain at previous values (8 and 22 from 2a)
+    assert guard_data["locale"]["day_start_hour"] == 8
+    assert guard_data["locale"]["day_end_hour"] == 22
+    log("✓ Cross-field guard rejected invalid hours, applied time_format")
+    
+    # 2c. Invalid slot_minutes fallback
+    log("\n[2c] Testing invalid slot_minutes fallback...")
+    slot_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/locale",
+        json={"slot_minutes": 45},
+        timeout=30
+    )
+    assert slot_resp.status_code == 200
+    slot_data = slot_resp.json()
+    # Should keep 30 from 2a
+    assert slot_data["locale"]["slot_minutes"] == 30
+    log("✓ Invalid slot_minutes 45 fell back to 30")
+    
+    # 2d. Invalid week_start fallback
+    log("\n[2d] Testing invalid week_start fallback...")
+    week_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/locale",
+        json={"week_start": "monday"},
+        timeout=30
+    )
+    assert week_resp.status_code == 200
+    week_data = week_resp.json()
+    # Should keep "sun" from 2a
+    assert week_data["locale"]["week_start"] == "sun"
+    log("✓ Invalid week_start 'monday' fell back to 'sun'")
+    
+    # ========================================================================
+    # TEST 3: PUT /api/groups/{code}/astral-persona
+    # ========================================================================
+    log("\n" + "=" * 80)
+    log("TEST 3: PUT /api/groups/{code}/astral-persona")
+    log("=" * 80)
+    
+    # 3a. Full payload
+    log("\n[3a] Testing full astral-persona payload...")
+    persona_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/astral-persona",
+        json={
+            "display_name": "nova",
+            "tone": "warm",
+            "lowercase": False,
+            "emoji_on": False,
+            "default_location": "Brooklyn, NY"
+        },
+        timeout=30
+    )
+    assert persona_resp.status_code == 200
+    persona_data = persona_resp.json()
+    assert persona_data["ok"] == True
+    assert persona_data["astral_persona"]["display_name"] == "nova"
+    assert persona_data["astral_persona"]["tone"] == "warm"
+    assert persona_data["astral_persona"]["lowercase"] == False
+    assert persona_data["astral_persona"]["emoji_on"] == False
+    assert persona_data["astral_persona"]["default_location"] == "Brooklyn, NY"
+    log("✓ Full astral-persona payload accepted and returned correctly")
+    
+    # 3b. Empty display_name preserves previous value
+    log("\n[3b] Testing empty display_name preservation...")
+    empty_name_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/astral-persona",
+        json={"display_name": ""},
+        timeout=30
+    )
+    assert empty_name_resp.status_code == 200
+    empty_name_data = empty_name_resp.json()
+    # Should keep "nova" from 3a
+    assert empty_name_data["astral_persona"]["display_name"] == "nova"
+    log("✓ Empty display_name preserved 'nova'")
+    
+    # 3c. Invalid tone fallback
+    log("\n[3c] Testing invalid tone fallback...")
+    tone_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/astral-persona",
+        json={"tone": "loud"},
+        timeout=30
+    )
+    assert tone_resp.status_code == 200
+    tone_data = tone_resp.json()
+    # Should keep "warm" from 3a
+    assert tone_data["astral_persona"]["tone"] == "warm"
+    log("✓ Invalid tone 'loud' fell back to 'warm'")
+    
+    # 3d. default_location="" clears to null
+    log("\n[3d] Testing default_location clear to null...")
+    clear_loc_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/astral-persona",
+        json={"default_location": ""},
+        timeout=30
+    )
+    assert clear_loc_resp.status_code == 200
+    clear_loc_data = clear_loc_resp.json()
+    assert clear_loc_data["astral_persona"]["default_location"] is None
+    log("✓ Empty default_location cleared to null")
+    
+    # 3e. Smoke check: POST /api/groups/{code}/astral/suggest still works
+    log("\n[3e] Smoke check: Astral suggest still works after persona update...")
+    suggest_resp = requests.post(
+        f"{BASE_URL}/groups/{code}/astral/suggest",
+        json={
+            "window_blurb": "Saturday 7-11pm",
+            "location_override": "Brooklyn, NY"
+        },
+        timeout=60  # Gemini calls take 10-25s
+    )
+    assert suggest_resp.status_code == 200
+    suggest_data = suggest_resp.json()
+    assert "intro" in suggest_data
+    assert "cards" in suggest_data
+    assert len(suggest_data["cards"]) <= 3
+    log("✓ Astral suggest returned 200 with cards after persona update")
+    
+    # ========================================================================
+    # TEST 4: PUT /api/groups/{code}/members/{member_id}/prefs
+    # ========================================================================
+    log("\n" + "=" * 80)
+    log("TEST 4: PUT /api/groups/{code}/members/{member_id}/prefs")
+    log("=" * 80)
+    
+    # 4a. Full payload on real member
+    log("\n[4a] Testing full member prefs payload...")
+    prefs_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
+        json={
+            "color_hex": "#ff00ff",
+            "fab_side": "left",
+            "theme": "dark",
+            "compact": True,
+            "hidden_panels": ["stats", "hangouts"]
+        },
+        timeout=30
+    )
+    assert prefs_resp.status_code == 200
+    prefs_data = prefs_resp.json()
+    assert prefs_data["ok"] == True
+    assert prefs_data["prefs"]["color_hex"] == "#ff00ff"
+    assert prefs_data["prefs"]["fab_side"] == "left"
+    assert prefs_data["prefs"]["theme"] == "dark"
+    assert prefs_data["prefs"]["compact"] == True
+    assert set(prefs_data["prefs"]["hidden_panels"]) == {"stats", "hangouts"}
+    log("✓ Full member prefs payload accepted and returned correctly")
+    
+    # 4b. Unknown member_id returns 404
+    log("\n[4b] Testing 404 for unknown member_id...")
+    unknown_member_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/members/unknown-member-id/prefs",
+        json={"theme": "light"},
+        timeout=30
+    )
+    assert unknown_member_resp.status_code == 404
+    log("✓ Unknown member_id returned 404")
+    
+    # 4c. color_hex="" sets to null
+    log("\n[4c] Testing color_hex clear to null...")
+    clear_color_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
+        json={"color_hex": ""},
+        timeout=30
+    )
+    assert clear_color_resp.status_code == 200
+    clear_color_data = clear_color_resp.json()
+    assert clear_color_data["prefs"]["color_hex"] is None
+    log("✓ Empty color_hex cleared to null")
+    
+    # 4d. hidden_panels filters unknown values
+    log("\n[4d] Testing hidden_panels filtering...")
+    filter_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
+        json={"hidden_panels": ["stats", "unknown", "hangouts"]},
+        timeout=30
+    )
+    assert filter_resp.status_code == 200
+    filter_data = filter_resp.json()
+    # Should only keep "stats" and "hangouts"
+    assert set(filter_data["prefs"]["hidden_panels"]) == {"stats", "hangouts"}
+    log("✓ hidden_panels filtered out 'unknown', kept ['stats', 'hangouts']")
+    
+    # 4e. Invalid fab_side fallback
+    log("\n[4e] Testing invalid fab_side fallback...")
+    fab_resp = requests.put(
+        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
+        json={"fab_side": "middle"},
+        timeout=30
+    )
+    assert fab_resp.status_code == 200
+    fab_data = fab_resp.json()
+    # Should keep "left" from 4a
+    assert fab_data["prefs"]["fab_side"] == "left"
+    log("✓ Invalid fab_side 'middle' fell back to 'left'")
+    
+    # ========================================================================
+    # TEST 5: GET /api/groups/{code} backfill
+    # ========================================================================
+    log("\n" + "=" * 80)
+    log("TEST 5: GET /api/groups/{code} backfill for new fields")
+    log("=" * 80)
+    
+    # Create a fresh group to test defaults
+    log("\n[5] Creating fresh group to test default backfill...")
+    fresh_resp = requests.post(
+        f"{BASE_URL}/groups",
+        json={
+            "group_name": "DefaultsTest",
+            "creator_name": "Bob",
+            "location": "SF"
+        },
+        timeout=30
+    )
+    assert fresh_resp.status_code == 200
+    fresh_response_data = fresh_resp.json()
+    fresh_data = fresh_response_data.get("group", fresh_response_data)  # Handle both nested and flat response
+    fresh_code = fresh_data["code"]
+    
+    # GET the group to verify backfill
+    get_resp = requests.get(f"{BASE_URL}/groups/{fresh_code}", timeout=30)
+    assert get_resp.status_code == 200
+    get_data = get_resp.json()
+    
+    # Verify branding defaults
+    assert "branding" in get_data
+    assert get_data["branding"]["accent_hex"] == "#0f172a"
+    assert get_data["branding"]["emoji"] == "🪐"
+    assert get_data["branding"]["theme_variant"] == "default"
+    assert get_data["branding"]["default_view"] == "dates"
+    log("✓ Branding defaults present and correct")
+    
+    # Verify locale defaults
+    assert "locale" in get_data
+    assert get_data["locale"]["week_start"] == "mon"
+    assert get_data["locale"]["time_format"] == "12h"
+    assert get_data["locale"]["day_start_hour"] == 0
+    assert get_data["locale"]["day_end_hour"] == 23
+    assert get_data["locale"]["slot_minutes"] == 60
+    log("✓ Locale defaults present and correct")
+    
+    # Verify astral_persona defaults
+    assert "astral_persona" in get_data
+    assert get_data["astral_persona"]["display_name"] == "astral"
+    assert get_data["astral_persona"]["tone"] == "edgy"
+    assert get_data["astral_persona"]["lowercase"] == True
+    assert get_data["astral_persona"]["emoji_on"] == True
+    log("✓ Astral persona defaults present and correct")
+    
+    # Verify member prefs defaults
+    assert len(get_data["members"]) > 0
+    member = get_data["members"][0]
+    assert "prefs" in member
+    assert member["prefs"]["fab_side"] == "right"
+    assert member["prefs"]["theme"] == "auto"
+    assert member["prefs"]["compact"] == False
+    assert member["prefs"]["hidden_panels"] == []
+    log("✓ Member prefs defaults present and correct")
+    
+    # ========================================================================
+    # ALL TESTS PASSED
+    # ========================================================================
+    log("\n" + "=" * 80)
+    log("✅ ALL PHASE 5 CUSTOMIZATION TESTS PASSED")
+    log("=" * 80)
+    log(f"\nTest groups created: {code}, {fresh_code}")
+    log("All 5 Phase 5 backend tasks verified successfully:")
+    log("  1. PUT /api/groups/{code}/branding - ✅")
+    log("  2. PUT /api/groups/{code}/locale - ✅")
+    log("  3. PUT /api/groups/{code}/astral-persona - ✅")
+    log("  4. PUT /api/groups/{code}/members/{member_id}/prefs - ✅")
+    log("  5. GET /api/groups/{code} backfill - ✅")
+    
+    return True
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        test_phase5_customization()
+        sys.exit(0)
+    except AssertionError as e:
+        log(f"\n❌ TEST FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    except Exception as e:
+        log(f"\n❌ UNEXPECTED ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

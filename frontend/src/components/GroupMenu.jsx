@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Edit3, Plus, Check, X, LogOut, Repeat } from "lucide-react";
+import { ChevronDown, Edit3, Plus, Check, X, LogOut, Repeat, Sliders } from "lucide-react";
 import { createGroup, updateGroup, leaveGroup, setLocalMemberId, addVisitedGroup, getVisitedGroups, removeVisitedGroup, clearLocalMemberId, getLocalMemberId, updateRecurrence } from "../lib/api";
 import { toast } from "sonner";
 
@@ -150,6 +150,16 @@ export default function GroupMenu({ group, onRenamed, onRecurrenceChange }) {
                 label="Rename this group"
                 onClick={() => setMode("rename")}
                 testId="menu-rename-btn"
+              />
+              <MenuItem
+                icon={<Sliders className="w-4 h-4" />}
+                label="Customize this group"
+                onClick={() => {
+                  setOpen(false);
+                  nav(`/g/${group.code}/customize`);
+                }}
+                testId="menu-customize-btn"
+                hint="branding · schedule · astral"
               />
               <MenuItem
                 icon={<Plus className="w-4 h-4" />}

@@ -368,6 +368,11 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
             }`}
           />
         </button>
+      </div>
+
+      {/* Secondary toolbar row — Recurring busy lives on its own row, right-aligned
+          so it sits directly beneath the Customize labels button above. */}
+      <div className="flex items-center justify-end mb-4">
         <button
           type="button"
           onClick={() => setRecurringPanelOpen((v) => !v)}

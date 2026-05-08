@@ -339,7 +339,7 @@ frontend:
     implemented: true
     working: false
     file: "frontend/src/components/FloatingLauncher.jsx, frontend/src/pages/Group.jsx"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -433,6 +433,59 @@ frontend:
           
           IMPACT: High - Users can drag the orb to the top wall, but then cannot reliably drag
           it away. The orb can get "stuck" at the top wall.
+      - working: false
+        agent: "main"
+        comment: |
+          Refactored to use Pointer Events with setPointerCapture instead of mouse events.
+          This should fix the "lost cursor mid-drag" bug and cross-element race conditions.
+          The orb now captures the pointer on pointerdown, so all pointermove/up events
+          fire on the orb element regardless of where the pointer travels.
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ CRITICAL BUG PERSISTS AFTER POINTER EVENTS REFACTOR
+          
+          RE-TESTED with comprehensive 6-step drag sequence after Pointer Events refactor:
+          
+          TEST RESULTS:
+          ✅ Test 1: Initial position read - orb at RIGHT wall (1876, 594)
+          ✅ Test 2: Drag to middle (960, 400) → correctly snapped to TOP wall (960, 44)
+          ❌ Test 3: Drag from TOP to BOTTOM (300, 900) → FAILED, stayed at TOP wall (960, 44)
+          ❌ Test 4: Drag from TOP to RIGHT (1700, 300) → FAILED, stayed at TOP wall (960, 44)
+          ✅ Test 5: Drag from TOP to LEFT (50, 540) → correctly snapped to LEFT wall (44, 540)
+          ✅ Test 6: Tap to open hub → Astral Hub opened successfully
+          
+          ROOT CAUSE CONFIRMED VIA DEEP DIAGNOSTIC:
+          The SVG icon inside the button is blocking pointer events!
+          
+          DOM inspection reveals:
+          - Element at button center: SVG (not the button)
+          - The SVG is the topmost element in the z-stack
+          - The button is the 2nd element
+          - When pointer events target coordinates (page.mouse API), they hit the SVG
+          - The SVG intercepts pointer events before they reach the button
+          - Result: onPointerDown handler on button never fires
+          
+          EVIDENCE:
+          1. Pointer event listeners installed on button element
+          2. Attempted drag from top wall to bottom (300, 900)
+          3. Result: ZERO pointer events captured (pointerdown=0, pointermove=0, pointerup=0)
+          4. Orb stayed at (960, 44) - no movement at all
+          5. Same result for drag to right (1700, 300)
+          6. BUT: Playwright's locator.click(force=True) DOES work (bypasses coordinates, targets button directly)
+          
+          THE FIX:
+          Add `pointer-events: none` or `style={{ pointerEvents: 'none' }}` to the SVG icons
+          (Sparkles and X components) in FloatingLauncher.jsx lines 184-188. This will allow
+          pointer events to pass through the SVG to the button element.
+          
+          Alternative fix: Add `pointer-events: none` to all children of the button via CSS:
+          `.fab-orb > * { pointer-events: none; }`
+          
+          IMPACT: High - The orb can be dragged TO the top wall, but then gets stuck there
+          because subsequent drag attempts fail (SVG blocks pointer events). This makes the
+          feature partially broken - users can position the orb once but then lose the ability
+          to reposition it if it ends up at the top wall.
   - task: "Recurring schedule — weekday-mode grid"
     implemented: true
     working: "NA"
@@ -665,6 +718,57 @@ agent_communication:
       - Drag from top → right: ✅ works (in some test runs)
       
       This suggests a timing, state, or event handling issue specific to the top wall position.
+  - agent: "testing"
+    message: |
+      ❌ CRITICAL BUG CONFIRMED - SVG ICON BLOCKING POINTER EVENTS
+      
+      Re-tested after Pointer Events refactor with comprehensive 6-step drag sequence.
+      The Pointer Events refactor did NOT fix the issue.
+      
+      **TEST RESULTS (6-step sequence):**
+      ✅ Test 1: Initial position - orb at RIGHT wall (1876, 594)
+      ✅ Test 2: Drag to middle (960, 400) → correctly snapped to TOP wall (960, 44)
+      ❌ Test 3: Drag from TOP to BOTTOM (300, 900) → FAILED, stayed at TOP (960, 44)
+      ❌ Test 4: Drag from TOP to RIGHT (1700, 300) → FAILED, stayed at TOP (960, 44)
+      ✅ Test 5: Drag from TOP to LEFT (50, 540) → correctly snapped to LEFT wall (44, 540)
+      ✅ Test 6: Tap to open hub → Astral Hub opened successfully
+      
+      **ROOT CAUSE CONFIRMED:**
+      The SVG icon (Sparkles/X) inside the button is intercepting pointer events!
+      
+      **DIAGNOSTIC EVIDENCE:**
+      1. DOM inspection at button center (960, 44):
+         - Element at center: SVG (NOT the button)
+         - Button is 2nd element in z-stack
+         - SVG is blocking pointer events from reaching button
+      
+      2. Pointer event capture test:
+         - Installed event listeners on button element
+         - Attempted drag from top wall to bottom
+         - Result: ZERO pointer events fired (down=0, move=0, up=0)
+         - Orb did not move at all
+      
+      3. Verification:
+         - Playwright's locator.click(force=True) DOES work
+         - This bypasses coordinates and targets button directly
+         - Confirms button is functional, but SVG is blocking coordinate-based events
+      
+      **THE FIX:**
+      Add `pointer-events: none` to the SVG icons in FloatingLauncher.jsx lines 184-188:
+      
+      Option 1 (inline style):
+      ```jsx
+      <Sparkles className="w-5 h-5 astral-spark" strokeWidth={2.5} style={{ pointerEvents: 'none' }} />
+      <X className="w-5 h-5" strokeWidth={2.5} style={{ pointerEvents: 'none' }} />
+      ```
+      
+      Option 2 (CSS class):
+      Add to CSS: `.fab-orb > * { pointer-events: none; }`
+      
+      **IMPACT:**
+      High - Orb can be dragged TO the top wall, but then gets stuck because subsequent
+      drag attempts fail. Users lose the ability to reposition the orb once it's at the
+      top wall. This makes the drag-to-anywhere feature partially broken.
       
       **RECOMMENDATION:**
       Investigate why the button's onMouseDown handler doesn't fire when the button is at

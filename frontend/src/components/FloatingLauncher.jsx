@@ -6,22 +6,21 @@ const POS_KEY = "planit:fab-pos-v2"; // JSON: {side, offset}
 const LEGACY_Y_KEY = "planit:fab-y";
 const LEGACY_SIDE_KEY = "planit:fab-side";
 
-// Floating, draggable launcher — single orb that opens the Astral Hub
-// (a sleek one-block menu surfacing every Astral function).
+// Floating, draggable launcher — single orb that opens the Astral Hub.
 //
-// Drag model:
-//   - You can drag the orb anywhere on the viewport — including the middle.
-//     The orb follows the pointer in real time.
-//   - On release, the orb snaps to the closest point on the nearest of all
-//     four walls (top / right / bottom / left) with a smooth animation.
-//   - Position persists across reloads.
+// Drag model (Pointer Events + setPointerCapture):
+//   - On pointerdown, the orb captures the pointer. From then on, ALL
+//     pointermove/up events fire on the orb element, no matter where the
+//     pointer travels — even outside the orb's bounding box. This avoids
+//     the classic "lost cursor mid-drag" bug AND the cross-element race
+//     conditions that plagued the previous mouse-event implementation.
+//   - The orb follows the pointer freely (top, right, bottom or middle —
+//     anywhere on screen).
+//   - On pointerup, the orb snaps to the closest point on the nearest of
+//     the 4 walls (top / right / bottom / left) with a smooth animation.
 //
-// Release model (the previous bug):
-//   - Both the React onMouseUp on the button AND the window-level mouseup
-//     fire on release. Whichever runs first must NOT clear shared state
-//     before the other can read it. We fix this by funnelling both into
-//     a single `commitDragEnd()` function that is idempotent and stored
-//     on a ref so listeners can call the live version every time.
+// Tap model:
+//   - Pointer down + up within 8px of travel = tap → toggle the Astral Hub.
 export default function FloatingLauncher({ group, memberId, onGroupRefresh, code }) {
   const [hubOpen, setHubOpen] = useState(false);
   const [pos, setPos] = useState(() => loadInitialPos());
@@ -29,87 +28,12 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
 
-  const drag = useRef({ active: false, moved: false, startX: 0, startY: 0 });
-  const freePosRef = useRef(null);
-  const commitRef = useRef(() => false);
-
-  // Mirror freePos to a ref so listeners always read the latest value.
-  useEffect(() => { freePosRef.current = freePos; }, [freePos]);
+  const drag = useRef({ active: false, moved: false, startX: 0, startY: 0, pointerId: null });
 
   // Persist snapped position.
   useEffect(() => {
     try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch {}
   }, [pos]);
-
-  // ── Single commit function (idempotent). Returns true if a drag was
-  // committed (so the tap toggle knows to skip).
-  const commitDragEnd = () => {
-    if (!drag.current.active) return false;
-    const wasDrag = drag.current.moved;
-    drag.current.active = false;
-    drag.current.moved = false;
-    if (wasDrag) {
-      const fp = freePosRef.current;
-      if (fp) {
-        const snapped = snapToNearestWall(fp.x, fp.y);
-        setPos(snapped);
-        setAnimating(true);
-        setTimeout(() => setAnimating(false), 280);
-      }
-      setDragging(false);
-      setFreePos(null);
-    }
-    return wasDrag;
-  };
-  // Keep the latest version on a ref so window listeners (bound once)
-  // always reach the up-to-date function.
-  useEffect(() => { commitRef.current = commitDragEnd; });
-
-  // Bind window-level move/up listeners ONCE.
-  useEffect(() => {
-    const onMove = (clientX, clientY) => {
-      if (!drag.current.active) return;
-      const dx = clientX - drag.current.startX;
-      const dy = clientY - drag.current.startY;
-      if (!drag.current.moved && Math.hypot(dx, dy) > 8) {
-        drag.current.moved = true;
-        setDragging(true);
-        setHubOpen(false);
-      }
-      if (drag.current.moved) {
-        const winW = window.innerWidth;
-        const winH = window.innerHeight;
-        const ORB_HALF = 28;
-        const x = Math.max(ORB_HALF, Math.min(winW - ORB_HALF, clientX));
-        const y = Math.max(ORB_HALF, Math.min(winH - ORB_HALF, clientY));
-        setFreePos({ x, y });
-      }
-    };
-    const mm = (e) => onMove(e.clientX, e.clientY);
-    const tm = (e) => {
-      if (!e.touches[0]) return;
-      onMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
-    const up = () => {
-      // Defer one tick so the React onMouseUp on the button (which fires
-      // before the window listener due to React's root-level delegation)
-      // has a chance to capture the tap intent. commitDragEnd is idempotent
-      // — both callers can fire it safely.
-      commitRef.current();
-    };
-    window.addEventListener("mousemove", mm);
-    window.addEventListener("mouseup", up);
-    window.addEventListener("touchmove", tm, { passive: true });
-    window.addEventListener("touchend", up);
-    window.addEventListener("touchcancel", up);
-    return () => {
-      window.removeEventListener("mousemove", mm);
-      window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", tm);
-      window.removeEventListener("touchend", up);
-      window.removeEventListener("touchcancel", up);
-    };
-  }, []);
 
   // Re-render on resize so the snapped offset re-clamps.
   useEffect(() => {
@@ -118,16 +42,74 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const startPress = (clientX, clientY) => {
-    drag.current = { active: true, moved: false, startX: clientX, startY: clientY };
+  // ── Pointer handlers (fire on the orb because of setPointerCapture) ──
+  const onPointerDown = (e) => {
+    // Only react to primary pointer (left mouse / first touch).
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch { /* some pointers can't be captured (e.g. mouse wheel) */ }
+    drag.current = {
+      active: true,
+      moved: false,
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+    };
   };
 
-  // React-level release on the orb. If it was a drag, commit & let snap run.
-  // If it was a tap (no movement), toggle the hub.
-  const endPressOnOrb = () => {
+  const onPointerMove = (e) => {
     if (!drag.current.active) return;
-    const wasDrag = commitRef.current();
-    if (!wasDrag) setHubOpen((v) => !v);
+    if (drag.current.pointerId != null && e.pointerId !== drag.current.pointerId) return;
+    const dx = e.clientX - drag.current.startX;
+    const dy = e.clientY - drag.current.startY;
+    if (!drag.current.moved && Math.hypot(dx, dy) > 8) {
+      drag.current.moved = true;
+      setDragging(true);
+      setHubOpen(false);
+    }
+    if (drag.current.moved) {
+      const winW = window.innerWidth;
+      const winH = window.innerHeight;
+      const ORB_HALF = 28;
+      const x = Math.max(ORB_HALF, Math.min(winW - ORB_HALF, e.clientX));
+      const y = Math.max(ORB_HALF, Math.min(winH - ORB_HALF, e.clientY));
+      setFreePos({ x, y });
+    }
+  };
+
+  const onPointerUp = (e) => {
+    if (!drag.current.active) return;
+    if (drag.current.pointerId != null && e.pointerId !== drag.current.pointerId) return;
+    const wasDrag = drag.current.moved;
+    const fp = wasDrag
+      ? {
+          x: Math.max(28, Math.min(window.innerWidth - 28, e.clientX)),
+          y: Math.max(28, Math.min(window.innerHeight - 28, e.clientY)),
+        }
+      : null;
+    drag.current = { active: false, moved: false, startX: 0, startY: 0, pointerId: null };
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    if (wasDrag && fp) {
+      const snapped = snapToNearestWall(fp.x, fp.y);
+      setPos(snapped);
+      setAnimating(true);
+      setTimeout(() => setAnimating(false), 280);
+      setDragging(false);
+      setFreePos(null);
+    } else {
+      // Tap.
+      setHubOpen((v) => !v);
+    }
+  };
+
+  const onPointerCancel = (e) => {
+    // Reset cleanly — no snap, no toggle.
+    drag.current = { active: false, moved: false, startX: 0, startY: 0, pointerId: null };
+    setDragging(false);
+    setFreePos(null);
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
   };
 
   // Compute style.
@@ -172,28 +154,19 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
             : dragging
             ? "none"
             : "left 180ms ease, right 180ms ease, top 180ms ease, bottom 180ms ease",
+          // Defensive: ensure the orb sits above any rogue overlay/modal
+          // backdrops that may share its z-index. 60 is already high but
+          // some host layouts use 50–70 inconsistently.
+          pointerEvents: "auto",
         }}
         data-testid="floating-launcher"
       >
         <button
           type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            startPress(e.clientX, e.clientY);
-          }}
-          onMouseUp={(e) => {
-            e.preventDefault();
-            endPressOnOrb();
-          }}
-          onTouchStart={(e) => {
-            const t = e.touches[0];
-            if (!t) return;
-            startPress(t.clientX, t.clientY);
-          }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            endPressOnOrb();
-          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
           className="fab-orb relative w-14 h-14 rounded-full grid place-items-center border-2 border-slate-900 transition"
           style={{
             background:

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles, X } from "lucide-react";
 import AstralHub from "./AstralHub";
 
-const POS_KEY = "planit:fab-pos-v2"; // JSON: {side, offset, x, y}
+const POS_KEY = "planit:fab-pos-v2"; // JSON: {side, offset}
 const LEGACY_Y_KEY = "planit:fab-y";
 const LEGACY_SIDE_KEY = "planit:fab-side";
 
@@ -16,42 +16,56 @@ const LEGACY_SIDE_KEY = "planit:fab-side";
 //     four walls (top / right / bottom / left) with a smooth animation.
 //   - Position persists across reloads.
 //
-// Tap model:
-//   - Press → start a drag candidate. Release without travelling >8px =
-//     a tap → toggle the Astral Hub.
-//   - Window-level pointer listeners are bound ONCE so they never detach
-//     mid-tap.
+// Release model (the previous bug):
+//   - Both the React onMouseUp on the button AND the window-level mouseup
+//     fire on release. Whichever runs first must NOT clear shared state
+//     before the other can read it. We fix this by funnelling both into
+//     a single `commitDragEnd()` function that is idempotent and stored
+//     on a ref so listeners can call the live version every time.
 export default function FloatingLauncher({ group, memberId, onGroupRefresh, code }) {
   const [hubOpen, setHubOpen] = useState(false);
-
-  // Snapped (resting) position. side ∈ {top,right,bottom,left}; offset ∈ [0,1].
   const [pos, setPos] = useState(() => loadInitialPos());
-
-  // While dragging, freePos is { x, y } absolute (px). null otherwise.
-  const [freePos, setFreePos] = useState(null);
+  const [freePos, setFreePos] = useState(null); // {x, y} during drag
   const [dragging, setDragging] = useState(false);
-  const [animating, setAnimating] = useState(false); // for the snap animation
+  const [animating, setAnimating] = useState(false);
 
-  const drag = useRef({
-    active: false,
-    moved: false,
-    startX: 0,
-    startY: 0,
-  });
-  const launcherRef = useRef(null);
-  // Mirror freePos into a ref so the once-bound `up` handler always sees
-  // the latest value.
+  const drag = useRef({ active: false, moved: false, startX: 0, startY: 0 });
   const freePosRef = useRef(null);
+  const commitRef = useRef(() => false);
 
-  // Persist position whenever the snapped position changes.
+  // Mirror freePos to a ref so listeners always read the latest value.
+  useEffect(() => { freePosRef.current = freePos; }, [freePos]);
+
+  // Persist snapped position.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(POS_KEY, JSON.stringify(pos));
-    } catch {}
+    try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch {}
   }, [pos]);
 
-  // Bind window-level move/up listeners ONCE — never detach during a tap.
+  // ── Single commit function (idempotent). Returns true if a drag was
+  // committed (so the tap toggle knows to skip).
+  const commitDragEnd = () => {
+    if (!drag.current.active) return false;
+    const wasDrag = drag.current.moved;
+    drag.current.active = false;
+    drag.current.moved = false;
+    if (wasDrag) {
+      const fp = freePosRef.current;
+      if (fp) {
+        const snapped = snapToNearestWall(fp.x, fp.y);
+        setPos(snapped);
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), 280);
+      }
+      setDragging(false);
+      setFreePos(null);
+    }
+    return wasDrag;
+  };
+  // Keep the latest version on a ref so window listeners (bound once)
+  // always reach the up-to-date function.
+  useEffect(() => { commitRef.current = commitDragEnd; });
+
+  // Bind window-level move/up listeners ONCE.
   useEffect(() => {
     const onMove = (clientX, clientY) => {
       if (!drag.current.active) return;
@@ -63,7 +77,6 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
         setHubOpen(false);
       }
       if (drag.current.moved) {
-        // Free movement — orb follows pointer with no axis constraint.
         const winW = window.innerWidth;
         const winH = window.innerHeight;
         const ORB_HALF = 28;
@@ -78,25 +91,11 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
       onMove(e.touches[0].clientX, e.touches[0].clientY);
     };
     const up = () => {
-      if (drag.current.active && drag.current.moved) {
-        // Snap to nearest wall based on free position.
-        if (freePosRef.current) {
-          const snapped = snapToNearestWall(
-            freePosRef.current.x,
-            freePosRef.current.y
-          );
-          setPos(snapped);
-          // Briefly enable a CSS transition for the snap animation.
-          setAnimating(true);
-          setTimeout(() => setAnimating(false), 260);
-        }
-        drag.current.active = false;
-        drag.current.moved = false;
-        setDragging(false);
-        setFreePos(null);
-      } else if (drag.current.active) {
-        drag.current.active = false;
-      }
+      // Defer one tick so the React onMouseUp on the button (which fires
+      // before the window listener due to React's root-level delegation)
+      // has a chance to capture the tap intent. commitDragEnd is idempotent
+      // — both callers can fire it safely.
+      commitRef.current();
     };
     window.addEventListener("mousemove", mm);
     window.addEventListener("mouseup", up);
@@ -110,17 +109,9 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
       window.removeEventListener("touchend", up);
       window.removeEventListener("touchcancel", up);
     };
-  }, []); // bind once
+  }, []);
 
-  // Mirror freePos into a ref so the once-bound `up` handler always sees the
-  // latest value (it's defined inside the bind-once useEffect).
-  useEffect(() => {
-    freePosRef.current = freePos;
-  }, [freePos]);
-
-  // Re-snap if the viewport resizes drastically (so the orb doesn't end up
-  // off-screen). We just keep the same side/offset — the geometry helper
-  // re-clamps on render via orbStyle.
+  // Re-render on resize so the snapped offset re-clamps.
   useEffect(() => {
     const onResize = () => setPos((p) => ({ ...p }));
     window.addEventListener("resize", onResize);
@@ -128,39 +119,23 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
   }, []);
 
   const startPress = (clientX, clientY) => {
-    drag.current = {
-      active: true,
-      moved: false,
-      startX: clientX,
-      startY: clientY,
-    };
+    drag.current = { active: true, moved: false, startX: clientX, startY: clientY };
   };
 
-  // Releasing on the orb itself: if the user didn't drag, toggle the Hub.
+  // React-level release on the orb. If it was a drag, commit & let snap run.
+  // If it was a tap (no movement), toggle the hub.
   const endPressOnOrb = () => {
     if (!drag.current.active) return;
-    const wasDrag = drag.current.moved;
-    drag.current.active = false;
-    drag.current.moved = false;
-    if (wasDrag) {
-      // The window-level `up` already handled snapping; nothing to do here.
-      setDragging(false);
-    } else {
-      setHubOpen((v) => !v);
-    }
+    const wasDrag = commitRef.current();
+    if (!wasDrag) setHubOpen((v) => !v);
   };
 
-  // Compute the absolute position style. While dragging → use freePos.
-  // Otherwise → derive from snapped pos.side + offset.
+  // Compute style.
   const orbStyle = (() => {
     const ORB_HALF = 28;
     if (freePos) {
-      return {
-        left: freePos.x - ORB_HALF,
-        top: freePos.y - ORB_HALF,
-      };
+      return { left: freePos.x - ORB_HALF, top: freePos.y - ORB_HALF };
     }
-    // Derive from snapped pos.
     if (typeof window === "undefined") {
       return { right: 16, top: "50%", transform: "translateY(-50%)" };
     }
@@ -182,7 +157,6 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
       const top = clamp(pos.offset * winH - ORB / 2, safeYRange[0], safeYRange[1]);
       return { left: PAD, top };
     }
-    // right (default)
     const top = clamp(pos.offset * winH - ORB / 2, safeYRange[0], safeYRange[1]);
     return { right: PAD, top };
   })();
@@ -190,12 +164,11 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
   return (
     <>
       <div
-        ref={launcherRef}
         className="fixed z-[60] select-none"
         style={{
           ...orbStyle,
           transition: animating
-            ? "left 220ms cubic-bezier(.2,.8,.2,1), right 220ms cubic-bezier(.2,.8,.2,1), top 220ms cubic-bezier(.2,.8,.2,1), bottom 220ms cubic-bezier(.2,.8,.2,1)"
+            ? "left 240ms cubic-bezier(.2,.8,.2,1), right 240ms cubic-bezier(.2,.8,.2,1), top 240ms cubic-bezier(.2,.8,.2,1), bottom 240ms cubic-bezier(.2,.8,.2,1)"
             : dragging
             ? "none"
             : "left 180ms ease, right 180ms ease, top 180ms ease, bottom 180ms ease",
@@ -225,9 +198,7 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
           style={{
             background:
               "linear-gradient(135deg, var(--pastel-mint) 0%, var(--pastel-lavender) 50%, var(--pastel-yellow) 100%)",
-            boxShadow: dragging
-              ? "5px 5px 0 0 var(--ink)"
-              : "3px 3px 0 0 var(--ink)",
+            boxShadow: dragging ? "5px 5px 0 0 var(--ink)" : "3px 3px 0 0 var(--ink)",
             transform: dragging ? "scale(1.1)" : "scale(1)",
             cursor: dragging ? "grabbing" : "grab",
             touchAction: "none",
@@ -245,7 +216,6 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
         </button>
       </div>
 
-      {/* The new sleek one-block Astral Hub. */}
       <AstralHub
         open={hubOpen}
         onClose={() => setHubOpen(false)}
@@ -265,13 +235,10 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// Given an absolute (x, y) on the viewport, return { side, offset } describing
-// the closest point on the nearest of the 4 walls (top/right/bottom/left).
-// Offset is normalized [0..1] along the chosen wall.
+// Given an absolute (x, y) on the viewport, return { side, offset } for the
+// closest point on the nearest of the 4 walls.
 function snapToNearestWall(x, y) {
-  if (typeof window === "undefined") {
-    return { side: "right", offset: 0.5 };
-  }
+  if (typeof window === "undefined") return { side: "right", offset: 0.5 };
   const winW = window.innerWidth;
   const winH = window.innerHeight;
   const distances = [
@@ -294,7 +261,6 @@ function snapToNearestWall(x, y) {
 
 function loadInitialPos() {
   if (typeof window === "undefined") return { side: "right", offset: 0.55 };
-  // Try v2 (4-wall) first.
   try {
     const raw = localStorage.getItem(POS_KEY);
     if (raw) {
@@ -308,14 +274,10 @@ function loadInitialPos() {
       }
     }
   } catch {}
-  // Migrate legacy left/right + y-fraction.
   const legacyY = parseFloat(localStorage.getItem(LEGACY_Y_KEY));
   const legacySide = localStorage.getItem(LEGACY_SIDE_KEY);
   if (Number.isFinite(legacyY) && (legacySide === "left" || legacySide === "right")) {
-    return {
-      side: legacySide,
-      offset: Math.max(0.04, Math.min(0.96, legacyY)),
-    };
+    return { side: legacySide, offset: Math.max(0.04, Math.min(0.96, legacyY)) };
   }
   return { side: "right", offset: 0.55 };
 }

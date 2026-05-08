@@ -339,7 +339,7 @@ frontend:
     implemented: true
     working: false
     file: "frontend/src/components/FloatingLauncher.jsx, frontend/src/pages/Group.jsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -390,6 +390,49 @@ frontend:
           
           IMPACT: High - This is a core feature of the new Astral Hub. Users cannot reposition
           the FAB properly as it stays in the middle of the screen instead of snapping to edges.
+      - working: false
+        agent: "main"
+        comment: |
+          Fixed the drag-end race condition. The previous bug was that drag.current.active
+          was being cleared by the button's onMouseUp before the window listener could read it.
+          Introduced a single commitDragEnd() function (line 46-63) that is idempotent and
+          stored on commitRef so both the button's onMouseUp and window's mouseup can safely
+          call it. The function checks drag.current.active, clears the flags, and if it was
+          a drag (moved=true), snaps to the nearest wall via snapToNearestWall().
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ CRITICAL BUG STILL PRESENT - Drag FROM top wall does NOT work
+          
+          RE-TESTED after commitDragEnd fix:
+          ✅ Test A: Drag to middle (960, 400) → correctly snapped to TOP wall (16px distance)
+          ❌ Test B: Drag to bottom-left (300, 900) → FAILED, stayed at TOP wall instead of snapping to BOTTOM
+          ✅ Test C: Drag to right (1700, 500) → correctly snapped to RIGHT wall (16px distance)
+          ✅ Test D: Tap after drags → correctly opened Astral Hub
+          
+          ROOT CAUSE IDENTIFIED:
+          When the orb is positioned at the TOP wall (y=16), the button's onMouseDown event
+          does NOT fire, preventing drag initiation. Detailed diagnostic test confirms:
+          
+          1. Orb at top wall position: (932, 16), button center at (960, 44)
+          2. Mouse moved to button center and mousedown triggered
+          3. Window mousemove events fired (17 events logged)
+          4. BUT: Button's onMouseDown handler NEVER called (not in event log)
+          5. Result: drag.current.active never set to true, so drag never initiates
+          6. Orb stayed at (932, 16) throughout entire drag attempt
+          
+          EVIDENCE:
+          - Drag FROM right wall (initial position) TO bottom-left: ✅ WORKS (snaps to bottom at 272, 1008)
+          - Drag FROM right wall TO middle: ✅ WORKS (snaps to top at 932, 16)
+          - Drag FROM top wall TO bottom: ❌ FAILS (stays at 932, 16)
+          - Drag FROM top wall TO right: ✅ WORKS (snaps to right at 1848, 472)
+          
+          The bug is INCONSISTENT - sometimes dragging from top wall works (Test C), sometimes
+          it doesn't (Test B). This suggests a timing or state issue specific to certain drag
+          directions or sequences.
+          
+          IMPACT: High - Users can drag the orb to the top wall, but then cannot reliably drag
+          it away. The orb can get "stuck" at the top wall.
   - task: "Recurring schedule — weekday-mode grid"
     implemented: true
     working: "NA"
@@ -591,6 +634,47 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "testing"
+    message: |
+      ❌ DRAG-TO-WALL SNAP BUG - PARTIALLY FIXED BUT STILL BROKEN
+      
+      Re-tested the FloatingLauncher drag-to-wall snap behavior after the commitDragEnd fix.
+      
+      **RESULTS:**
+      - Test A (drag to middle → TOP snap): ✅ PASS
+      - Test B (drag to bottom-left → BOTTOM snap): ❌ FAIL (stayed at TOP)
+      - Test C (drag to right → RIGHT snap): ✅ PASS
+      - Test D (tap opens hub): ✅ PASS
+      
+      **ROOT CAUSE:**
+      When the orb is at the TOP wall, dragging it sometimes fails. The button's onMouseDown
+      event does NOT fire, so drag.current.active is never set to true, and the drag never
+      initiates. The orb stays frozen at the top wall position.
+      
+      **EVIDENCE:**
+      Isolated test dragging FROM top wall TO bottom:
+      - Mouse moved from (960, 44) to (300, 900) - 856px distance
+      - 17 window mousemove events fired
+      - Button mousedown event NEVER fired (not in event log)
+      - Orb stayed at (932, 16) throughout entire drag
+      
+      **INCONSISTENCY:**
+      The bug is intermittent:
+      - Drag from right → middle → top: ✅ works
+      - Drag from top → bottom: ❌ fails
+      - Drag from top → right: ✅ works (in some test runs)
+      
+      This suggests a timing, state, or event handling issue specific to the top wall position.
+      
+      **RECOMMENDATION:**
+      Investigate why the button's onMouseDown handler doesn't fire when the button is at
+      the top wall (y=16). Possible causes:
+      1. CSS issue (pointer-events, z-index, overflow)
+      2. Event propagation issue
+      3. React synthetic event handling issue
+      4. Timing/state issue with previous drag completion
+      
+      The commitDragEnd fix resolved the original race condition, but exposed this new bug.
   - agent: "main"
     message: |
       Four NEW backend additions to verify (don't re-run prior phases — they're green):

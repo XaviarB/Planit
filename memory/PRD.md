@@ -272,3 +272,24 @@ Build a website that can group you and your friends schedules with time slots an
 - Numerical layout test: max label-x delta across 7 weeks = 2 px
 - Screenshot at week +6 shows no wrapping anywhere; full text visible
 - Pre-seeded localStorage shows the Recent section rendering above All apps
+
+---
+
+## Iteration — Feb 2026 · part 8 (floating launcher + weekday recurrence + last-batch verification)
+
+### Changes
+- **Floating Astral + Toolkit launcher (FAB)** — `frontend/src/components/FloatingLauncher.jsx`
+  - Removed "Ask Astral" and "My Toolkit" pills from the Group topbar Row 2.
+  - Added a draggable circular orb fixed to the page edge. Tap → small popover with `[fab-open-astral]` and `[fab-open-tools]` buttons. Drag (>8px move) → orb relocates; localStorage `planit:fab-y` / `planit:fab-side` persist position.
+  - Both `AstralDrawer` and `MyToolsDrawer` rendering now lives inside the launcher (Group.jsx no longer references them directly).
+  - Topbar Row 2 is now just two buttons (Suggest a time + Edit my availability) for a cleaner look on every device.
+- **Weekday-mode recurrence grid** — `frontend/src/pages/Group.jsx`
+  - When `group.recurrence_kind !== "none"`, columns become `[{key:"d0",label:"Mon"}…{key:"d6",label:"Sun"}]` and `mode="weekly"` is passed to `HeatmapGrid`, `AvailabilityEditor`, `QuickStats`, `MembersSchedule`, `SuggestMeeting`.
+  - The week-snapshot navigator and the date-range chip bar are hidden in recurring mode (no calendar dates to scrub).
+  - Slot persistence to `weekly` + `d{idx}` was already supported by `lib/schedule.js`; the change was purely in the Group page column generators.
+- **Backend bug fix** — `UpdateRemixDefaultsReq.presets` typed as `Optional[List[Any]]` instead of `Optional[List[str]]` so non-string entries are silently dropped at the runtime `isinstance` filter (per the spec) instead of getting rejected with HTTP 422.
+
+### Verified
+- Backend pytest suite: 16/16 (after the `List[Any]` fix). Endpoints covered: `astral/history` GET/DELETE, `remix-defaults` PUT, `recurrence` PUT, `og.png` + `og/{code}.png`. Iteration_1.json.
+- Frontend e2e: 11/11. FAB tap (mouse + touch), drag-to-reposition with localStorage persistence, popover toggle, Astral drawer launch, Tools drawer launch, recurrence weekly switch (heatmap + editor render weekday columns + recurrence badge + suggestion banner suppression), back-to-none reverts cleanly. Iteration_3.json.
+- ESLint clean on FloatingLauncher.jsx + Group.jsx; Ruff clean on server.py.

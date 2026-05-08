@@ -132,6 +132,31 @@ class Hangout(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class AstralRound(BaseModel):
+    """A single round of Astral suggestions persisted to the group's history.
+    Auto-saved at the end of every /astral/suggest call so the group can scroll
+    back through prior rounds and reopen them. Also drives the "never repeat
+    a venue we've ever shown this group" guarantee on remix."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    member_id: Optional[str] = None  # who asked (for attribution)
+    window_blurb: str = ""
+    used_location: Optional[str] = None
+    history_blurb: Optional[str] = None
+    intro: str = ""
+    cards: List[Dict] = []
+    was_remix: bool = False
+    remix_presets: List[str] = []
+    remix_hint: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class RemixDefaults(BaseModel):
+    """Group-level sticky remix preferences — pre-select these chips and seed
+    the hint whenever any member opens Astral for this group."""
+    presets: List[str] = []
+    hint: Optional[str] = None
+
+
 class Group(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     code: str
@@ -142,6 +167,15 @@ class Group(BaseModel):
     members: List[Member] = []
     reasons: List[BusyReason] = []
     hangouts: List[Hangout] = []
+    # Astral memory — last N rounds of suggestions so members can scroll
+    # back, resume, and so the engine never repeats a previously-shown venue.
+    astral_history: List[AstralRound] = []
+    # Sticky remix preferences for this crew — the chips/hint that get
+    # pre-selected whenever any member opens the Ask Astral drawer.
+    remix_defaults: RemixDefaults = Field(default_factory=RemixDefaults)
+    # Recurring schedule mode — "none" (default, calendar-week) or "weekly"
+    # / "biweekly" (treats the heatmap as a recurring weekday cycle).
+    recurrence_kind: str = "none"
     heat_colors: List[str] = Field(default_factory=lambda: [
         "#1f0500",  # 0 free  — ember black (darkest)
         "#dc2626",  # 1 (a few) — deep neon red
@@ -208,6 +242,12 @@ class AstralSuggestReq(BaseModel):
     previous_cards: Optional[List[Dict]] = None
     remix_presets: Optional[List[str]] = None  # e.g. ["cheaper", "different_neighborhood"]
     remix_hint: Optional[str] = None           # e.g. "we want tacos, no bars"
+    # Who's asking — used purely for history attribution when this round gets
+    # auto-saved into the group's astral_history. Optional, falls back to None.
+    member_id: Optional[str] = None
+    # When true, do NOT persist this round to the group's astral_history.
+    # Default: persist. UI uses skip_history=true if it's just exploring.
+    skip_history: bool = False
 
 
 class AstralDraftInviteReq(BaseModel):
@@ -480,7 +520,219 @@ async def astral_suggest(code: str, req: AstralSuggestReq):
     out["used_location"] = location
     out["participant_count"] = member_count
     out["was_remix"] = bool(req.previous_cards or req.remix_presets or req.remix_hint)
+
+    # Persist this round to the group's astral_history (FIFO cap at 30 rounds).
+    # The drawer reads this on open to (a) show "Recent rounds" and (b) seed
+    # shownCards so remix never repeats anything we've EVER shown this group.
+    if not req.skip_history and (out.get("cards") or []):
+        round_doc = AstralRound(
+            member_id=req.member_id,
+            window_blurb=req.window_blurb or "",
+            used_location=location,
+            history_blurb=req.history_blurb,
+            intro=out.get("intro") or "",
+            cards=out.get("cards") or [],
+            was_remix=out["was_remix"],
+            remix_presets=req.remix_presets or [],
+            remix_hint=req.remix_hint,
+        ).model_dump()
+        await db.groups.update_one(
+            {"code": code.upper()},
+            {
+                # Push then trim — keep only the last 30 rounds.
+                "$push": {
+                    "astral_history": {
+                        "$each": [round_doc],
+                        "$slice": -30,
+                    }
+                }
+            },
+        )
+        out["round_id"] = round_doc["id"]
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Astral history — list, fetch one, clear all                                 #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/groups/{code}/astral/history")
+async def astral_history_list(code: str, limit: int = 20):
+    g = await find_group(code)
+    rounds = list(g.get("astral_history") or [])
+    # Newest first, capped to `limit`.
+    rounds.reverse()
+    return {"rounds": rounds[: max(1, min(limit, 50))]}
+
+
+@api_router.delete("/groups/{code}/astral/history")
+async def astral_history_clear(code: str):
+    await find_group(code)
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {"$set": {"astral_history": []}},
+    )
+    return {"ok": True}
+
+
+@api_router.delete("/groups/{code}/astral/history/{round_id}")
+async def astral_history_delete_one(code: str, round_id: str):
+    await find_group(code)
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {"$pull": {"astral_history": {"id": round_id}}},
+    )
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# Group-level remix preferences (sticky chips per group)                      #
+# --------------------------------------------------------------------------- #
+
+class UpdateRemixDefaultsReq(BaseModel):
+    presets: Optional[List[str]] = None
+    hint: Optional[str] = None
+
+
+@api_router.put("/groups/{code}/remix-defaults")
+async def update_remix_defaults(code: str, req: UpdateRemixDefaultsReq):
+    """Save the chip presets + free-text hint that should be pre-selected
+    whenever any member opens Ask Astral for this group. Empty list / empty
+    string clears them."""
+    await find_group(code)
+    payload = RemixDefaults(
+        presets=[p for p in (req.presets or []) if isinstance(p, str)][:12],
+        hint=(req.hint or "").strip()[:240] or None,
+    ).model_dump()
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {"$set": {"remix_defaults": payload}},
+    )
+    return {"ok": True, "remix_defaults": payload}
+
+
+# --------------------------------------------------------------------------- #
+# Recurring schedule mode                                                     #
+# --------------------------------------------------------------------------- #
+
+class UpdateRecurrenceReq(BaseModel):
+    kind: str  # "none" | "weekly" | "biweekly"
+
+
+@api_router.put("/groups/{code}/recurrence")
+async def update_recurrence(code: str, req: UpdateRecurrenceReq):
+    """Toggle recurring schedule mode for the group. When set to "weekly" or
+    "biweekly", the heatmap UI switches from calendar dates to weekday columns."""
+    if req.kind not in ("none", "weekly", "biweekly"):
+        raise HTTPException(status_code=400, detail="kind must be 'none' | 'weekly' | 'biweekly'")
+    await find_group(code)
+    await db.groups.update_one(
+        {"code": code.upper()},
+        {"$set": {"recurrence_kind": req.kind}},
+    )
+    return {"ok": True, "recurrence_kind": req.kind}
+
+
+# --------------------------------------------------------------------------- #
+# Open Graph preview image — for rich link unfurls in iMessage/Slack/Discord  #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/og.png")
+@api_router.get("/og/{code}.png")
+async def og_card(code: Optional[str] = None):
+    """Generate a 1200x630 OG card PNG. If `code` is provided, the card is
+    personalized with the group's name + member count + invite code; otherwise
+    it's the generic Planit landing card. Cached aggressively at the edge."""
+    from io import BytesIO
+    from fastapi.responses import Response
+    from PIL import Image, ImageDraw, ImageFont
+
+    W, H = 1200, 630
+    BG = (250, 250, 247)        # #fafaf7 — base
+    INK = (15, 23, 42)          # #0f172a — slate-900
+    MINT = (209, 242, 235)      # #d1f2eb — pastel mint
+    YELLOW = (254, 249, 231)    # #fef9e7 — pastel yellow
+    LAVENDER = (244, 236, 247)  # #f4ecf7 — pastel lavender
+
+    # Try to load Outfit (the heading font we use in the app); fall back to
+    # PIL default if the file isn't available — the card still looks fine.
+    def _font(size):
+        for path in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ):
+            try:
+                return ImageFont.truetype(path, size)
+            except (OSError, IOError):
+                continue
+        return ImageFont.load_default()
+
+    # Personalize if a group code was given.
+    title = "Planit"
+    subtitle = "no accounts. no installs. just plans."
+    chip_text = "tap heatmap → ask astral → lock it in"
+    invite = ""
+    if code:
+        try:
+            g = await find_group(code)
+            title = (g.get("name") or "Planit").strip()[:40]
+            mc = len(g.get("members") or [])
+            subtitle = f"{mc} {'person' if mc == 1 else 'people'} synced. join the crew."
+            chip_text = "drop your free time. astral picks the spot."
+            invite = (g.get("code") or code).upper()
+        except HTTPException:
+            pass
+
+    img = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(img)
+
+    # Decorative pastel "constellation" blobs in the corners.
+    for cx, cy, r, color in (
+        (110, 130, 80, MINT),
+        (1080, 110, 60, YELLOW),
+        (1100, 540, 90, LAVENDER),
+        (170, 540, 50, YELLOW),
+    ):
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color, outline=INK, width=4)
+
+    # Bold "neo-brutalist" frame.
+    d.rectangle((40, 40, W - 40, H - 40), outline=INK, width=8)
+
+    # Wordmark + invite chip top-left.
+    d.text((84, 92), "PLANIT", fill=INK, font=_font(64))
+    if invite:
+        chip = f"  invite · {invite}  "
+        cw, ch = d.textlength(chip, font=_font(28)), 40
+        d.rectangle((84, 180, 84 + cw, 180 + ch), fill=MINT, outline=INK, width=3)
+        d.text((84, 184), chip, fill=INK, font=_font(28))
+
+    # Big group title.
+    title_font = _font(96 if len(title) <= 18 else 78 if len(title) <= 28 else 60)
+    d.text((84, 260), title, fill=INK, font=title_font)
+
+    # Subtitle.
+    d.text((84, 400), subtitle, fill=INK, font=_font(36))
+
+    # Footer chip-callout.
+    chip_font = _font(28)
+    chip_pad_x, chip_pad_y = 24, 14
+    chip_w = int(d.textlength(chip_text, font=chip_font)) + chip_pad_x * 2
+    chip_h = 56
+    d.rectangle((84, H - 110, 84 + chip_w, H - 110 + chip_h), fill=YELLOW, outline=INK, width=3)
+    d.text((84 + chip_pad_x, H - 110 + chip_pad_y), chip_text, fill=INK, font=chip_font)
+
+    buf = BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/png",
+        headers={
+            # Cache for an hour — names/member counts don't change that often
+            # and re-rendering on every link unfurl is overkill.
+            "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        },
+    )
 
 
 @api_router.post("/groups/{code}/astral/draft-invite")

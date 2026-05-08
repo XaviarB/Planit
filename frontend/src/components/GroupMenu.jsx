@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Edit3, Plus, Check, X, LogOut } from "lucide-react";
-import { createGroup, updateGroup, leaveGroup, setLocalMemberId, addVisitedGroup, getVisitedGroups, removeVisitedGroup, clearLocalMemberId, getLocalMemberId } from "../lib/api";
+import { ChevronDown, Edit3, Plus, Check, X, LogOut, Repeat } from "lucide-react";
+import { createGroup, updateGroup, leaveGroup, setLocalMemberId, addVisitedGroup, getVisitedGroups, removeVisitedGroup, clearLocalMemberId, getLocalMemberId, updateRecurrence } from "../lib/api";
 import { toast } from "sonner";
 
 /**
@@ -10,7 +10,7 @@ import { toast } from "sonner";
  *  - Create a new group
  *  - Jump to another visited group
  */
-export default function GroupMenu({ group, onRenamed }) {
+export default function GroupMenu({ group, onRenamed, onRecurrenceChange }) {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState(null); // null | "rename" | "create" | "leave"
@@ -156,6 +156,17 @@ export default function GroupMenu({ group, onRenamed }) {
                 label="Create a new group"
                 onClick={() => setMode("create")}
                 testId="menu-create-btn"
+              />
+              <MenuItem
+                icon={<Repeat className="w-4 h-4" />}
+                label="Recurring schedule…"
+                onClick={() => setMode("recurrence")}
+                testId="menu-recurrence-btn"
+                hint={
+                  group.recurrence_kind && group.recurrence_kind !== "none"
+                    ? group.recurrence_kind
+                    : "off"
+                }
               />
               <MenuItem
                 icon={<LogOut className="w-4 h-4" />}
@@ -308,13 +319,73 @@ export default function GroupMenu({ group, onRenamed }) {
               </div>
             </div>
           )}
+
+          {mode === "recurrence" && (
+            <div data-testid="recurrence-panel" className="space-y-2">
+              <div className="label-caps mb-1">Recurring schedule</div>
+              <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>
+                For weekly crews — show day-of-week columns instead of calendar
+                dates so the heatmap rolls forever.
+              </p>
+              {[
+                { kind: "none", label: "Off (calendar dates)" },
+                { kind: "weekly", label: "Weekly" },
+                { kind: "biweekly", label: "Bi-weekly" },
+              ].map(({ kind, label }) => {
+                const active = (group.recurrence_kind || "none") === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    data-testid={`recurrence-opt-${kind}`}
+                    disabled={busy || active}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await updateRecurrence(group.code, kind);
+                        onRecurrenceChange?.(kind);
+                        toast.success(
+                          kind === "none"
+                            ? "switched to calendar mode"
+                            : `set to ${kind}`
+                        );
+                        setMode(null);
+                        setOpen(false);
+                      } catch (err) {
+                        console.error(err);
+                        toast.error("couldn't update");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border-2 border-slate-900 text-sm font-bold font-heading ${
+                      active
+                        ? "bg-slate-900 text-white"
+                        : "bg-white hover:bg-[var(--pastel-mint)]"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {active && <Check className="w-4 h-4" />}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setMode(null)}
+                className="neo-btn ghost text-sm w-full mt-2"
+                data-testid="recurrence-cancel-btn"
+              >
+                Done
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function MenuItem({ icon, label, onClick, testId, danger = false }) {
+function MenuItem({ icon, label, onClick, testId, danger = false, hint }) {
   return (
     <button
       onClick={onClick}
@@ -335,7 +406,12 @@ function MenuItem({ icon, label, onClick, testId, danger = false }) {
       >
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {hint && (
+        <span className="text-[0.55rem] uppercase tracking-wider font-bold opacity-60">
+          {hint}
+        </span>
+      )}
     </button>
   );
 }

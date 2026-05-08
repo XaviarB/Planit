@@ -96,6 +96,27 @@ export const memberFeedUrl = (code, member_id) =>
 export const hangoutEventIcsUrl = (code, hid) =>
   `${API}/groups/${code}/hangouts/${hid}/event.ics`;
 
+// ---- Astral history (per-group memory of suggestion rounds) -------------- //
+
+export const listAstralHistory = (code, limit = 20) =>
+  api.get(`/groups/${code}/astral/history`, { params: { limit } }).then((r) => r.data);
+
+export const clearAstralHistory = (code) =>
+  api.delete(`/groups/${code}/astral/history`).then((r) => r.data);
+
+export const deleteAstralRound = (code, round_id) =>
+  api.delete(`/groups/${code}/astral/history/${round_id}`).then((r) => r.data);
+
+// ---- Group-level remix preferences --------------------------------------- //
+
+export const updateRemixDefaults = (code, payload) =>
+  api.put(`/groups/${code}/remix-defaults`, payload).then((r) => r.data);
+
+// ---- Recurrence ---------------------------------------------------------- //
+
+export const updateRecurrence = (code, kind) =>
+  api.put(`/groups/${code}/recurrence`, { kind }).then((r) => r.data);
+
 // ---------- Life Templates ----------
 
 export const listTemplates = (code, member_id) =>

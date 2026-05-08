@@ -1,0 +1,50 @@
+{
+  "summary": "Backend-only verification of new Phase 2 endpoints (Astral history, Group remix defaults, Recurrence toggle, OG card image). 15/18 pytest tests passed. 2 failures are infra (Cloudflare strips Cache-Control header on public URL — backend is correct), 1 is a real backend bug (non-string remix preset entries cause 422 instead of being silently dropped).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/groups/{code}/remix-defaults",
+        "issue": "Spec says 'Non-string preset entries silently dropped'. Pydantic model declares presets: Optional[List[str]] so requests with mixed types (e.g. ['cheaper', 42, None]) get rejected with HTTP 422 BEFORE the server's [p for p in req.presets if isinstance(p, str)] filter runs. Fix: change model to List[Any] (or List[Union[str, Any]]) so Pydantic accepts the payload and the existing isinstance filter does the dropping.",
+        "priority": "MEDIUM"
+      },
+      {
+        "endpoint": "GET /api/og.png and /api/og/{code}.png",
+        "issue": "Backend code correctly returns Cache-Control: 'public, max-age=3600, s-maxage=3600' (verified via curl http://localhost:8001/api/og.png). However the public/Cloudflare ingress at preview.emergentagent.com overrides it to 'no-store, no-cache, must-revalidate'. Spec test asserts the public-URL header. This is an INFRASTRUCTURE override, not a backend defect — backend implementation is correct. Action: either accept this as expected for the preview env or have ingress whitelist /api/og*.png from the no-store rule.",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2_new_endpoints.py",
+    "/app/test_reports/pytest/pytest_phase2.xml"
+  ],
+  "action_items": [
+    "Fix UpdateRemixDefaultsReq: change `presets: Optional[List[str]]` → `presets: Optional[List[Any]]` so non-string entries are silently filtered (per spec) instead of triggering Pydantic 422.",
+    "Verified PASSING (no action): Astral history list/clear-all/clear-one, skip_history flag honored, suggest returns round_id matching history entry, remix-defaults persistence/clearing/240-char hint truncation/12-preset cap, recurrence weekly/biweekly/none + 400 on 'monthly' + default 'none' for new groups, OG png magic bytes & content-type & fallback for bogus code."
+  ],
+  "critical_code_review_comments": [
+    "server.py line 593: presets typed List[str] forces Pydantic to reject mixed payloads before the runtime isinstance filter can drop them. Spec contract says silent drop — typing too tight.",
+    "server.py is 1203 lines — exceeds 700-line guideline. Consider splitting Astral, Calendar sync, OG image, Group CRUD into separate routers.",
+    "OG endpoint loads PIL + tries TTF fonts on every request with no in-process cache; fine for low traffic but consider lru_cache(_font) and a simple LRU on the rendered PNG keyed by (code, member_count, name) since Cache-Control is being stripped externally."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2_new_endpoints.py"
+  ],
+  "success_rate": {
+    "backend": "83% (15/18) — 2 of 3 failures are infra/spec-only, 1 is a real low-severity Pydantic typing fix",
+    "frontend": "not tested (per request)"
+  },
+  "test_credentials": "n/a — no auth on these endpoints",
+  "seed_data_creation": "Reused existing group N7UVGL ('Weekend Warriors'). Created one transient TEST_Recur group inside test_default_recurrence_for_old_group; not cleaned up (no DELETE /groups endpoint exists).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file at /app/backend/tests/test_phase2_new_endpoints.py is reusable. It auto-loads REACT_APP_BACKEND_URL from /app/frontend/.env if env var absent. Gemini suggest calls take ~20s each — full suite ~110s. Reuses N7UVGL if present; falls back to creating a fresh group. After main agent fixes the List[str]→List[Any] typing on UpdateRemixDefaultsReq, only re-run TestRemixDefaults::test_non_string_presets_dropped to verify.",
+  "rca of the issue": "Pydantic v2 validates types strictly on inbound request bodies. The spec wanted lenient behavior ('non-string entries silently dropped') but the model schema (`List[str]`) makes Pydantic reject the request with 422 before the route function runs. The runtime filter `[p for p in (req.presets or []) if isinstance(p, str)][:12]` is therefore unreachable for mixed-type input. Fix: relax the model type to `List[Any]` (or `List[Union[str, int, float, bool, None, dict, list]]`) and rely on the existing isinstance filter."
+}

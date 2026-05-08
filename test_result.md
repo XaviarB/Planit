@@ -240,6 +240,65 @@ backend:
              treated as plain (non-remix) call
           Gemini 2.5 Pro calls completed in 10-25s range. All response shapes validated. Backward
           compatibility confirmed: plain calls work exactly as before with was_remix=false added.
+  - task: "Astral history persistence (auto-save on suggest, GET/DELETE endpoints)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          POST /api/groups/{code}/astral/suggest now AUTO-SAVES every successful round into
+          group's astral_history (FIFO capped at 30). Response now also returns round_id.
+          GET /api/groups/{code}/astral/history?limit=20 returns {"rounds":[...]} newest-first.
+          DELETE /api/groups/{code}/astral/history clears all rounds.
+          DELETE /api/groups/{code}/astral/history/{round_id} removes one round.
+          Suggest payload accepts skip_history=true to disable autosave for that call.
+  - task: "Group remix defaults (PUT /groups/{code}/remix-defaults)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          PUT /api/groups/{code}/remix-defaults body {"presets": [...], "hint": "..."}.
+          Empty list / empty string clears. Hint capped at 240 chars, presets capped at 12.
+          GET /api/groups/{code} now returns remix_defaults field.
+  - task: "Recurrence toggle (PUT /groups/{code}/recurrence)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          PUT /api/groups/{code}/recurrence body {"kind": "weekly"} → 200.
+          kind must be "none" | "weekly" | "biweekly" — anything else returns 400.
+          GET /api/groups/{code} returns recurrence_kind (default "none" for old groups).
+  - task: "OG card image endpoint (GET /api/og.png and /api/og/{code}.png)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          GET /api/og.png → 200 image/png with PNG magic bytes.
+          GET /api/og/{code}.png → 200, personalized PNG (real or unknown code → both 200, fallback for unknown).
+          Cache-Control "public, max-age=3600, s-maxage=3600".
   - task: "Single-event .ics download endpoint"
     implemented: true
     working: true
@@ -453,13 +512,55 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Topbar redesign — 2-row layout, segmented compact pill, stretched action buttons"
-    - "Astral remix UI in AstralDrawer (chips + free-text + remix button)"
-    - "Per-event .ics download icon in HangoutsList"
-    - "Landing page elevation — bigger nav pill, larger theme toggle, larger Create/Join CTAs"
+    - "Astral history persistence (auto-save on suggest, GET/DELETE endpoints)"
+    - "Group remix defaults (PUT /groups/{code}/remix-defaults)"
+    - "Recurrence toggle (PUT /groups/{code}/recurrence)"
+    - "OG card image endpoint (GET /api/og.png and /api/og/{code}.png)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Four NEW backend additions to verify (don't re-run prior phases — they're green):
+
+      1) ASTRAL HISTORY (per-group persistent memory of suggestion rounds)
+         - The existing POST /api/groups/{code}/astral/suggest now AUTO-SAVES every round
+           (when cards are returned and skip_history is not set) into the group's
+           astral_history field. The persisted round includes id, member_id (from new
+           optional req field), window_blurb, used_location, intro, cards, was_remix,
+           remix_presets, remix_hint, created_at. The history is FIFO-capped at 30 rounds.
+           Verify: after a suggest call, GET /api/groups/{code}/astral/history returns the
+           round; round_id is also returned in the suggest response.
+         - GET /api/groups/{code}/astral/history?limit=20 → {"rounds": [...]} newest-first.
+         - DELETE /api/groups/{code}/astral/history → clears all rounds, returns {"ok":true}.
+         - DELETE /api/groups/{code}/astral/history/{round_id} → removes one round.
+         - skip_history=true on suggest skips the auto-save (verify history doesn't grow).
+
+      2) GROUP REMIX DEFAULTS (sticky chips per group)
+         - PUT /api/groups/{code}/remix-defaults
+           body: {"presets": ["cheaper", "outdoorsy"], "hint": "we hate bars"}
+           → {"ok":true, "remix_defaults": {...}}.
+         - Empty list / empty string clears them. Unknown chip keys are silently kept
+           (frontend filters; backend just stores and trims to 12). Hint capped at 240 chars.
+         - GET /api/groups/{code} now returns remix_defaults field.
+
+      3) RECURRENCE TOGGLE
+         - PUT /api/groups/{code}/recurrence body: {"kind": "weekly"} → {"ok":true, "recurrence_kind":"weekly"}.
+         - kind must be "none" | "weekly" | "biweekly" — anything else returns 400.
+         - GET /api/groups/{code} returns recurrence_kind (default "none" for old groups).
+
+      4) OG CARD IMAGE ENDPOINTS (for rich link unfurls)
+         - GET /api/og.png → 200, image/png, body starts with PNG magic bytes (\\x89PNG).
+         - GET /api/og/{code}.png → 200, personalized PNG. Even with a non-existent code,
+           it should still return a generic card (HTTPException is caught internally) — actually
+           wait, re-reading the code: if find_group raises HTTPException it falls back to
+           generic. Verify both real code (e.g. N7UVGL) and bogus code (e.g. ZZZZZZ) return 200.
+         - Cache-Control header is "public, max-age=3600, s-maxage=3600".
+
+      Smoke-test group: code N7UVGL ("Weekend Warriors", Brooklyn, NY).
+      Backend URL from /app/frontend/.env. Gemini calls (in #1 setup) take 10-25s.
 
 agent_communication:
   - agent: "main"

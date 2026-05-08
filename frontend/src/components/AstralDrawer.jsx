@@ -3,13 +3,17 @@ import { toast } from "sonner";
 import {
   Sparkles, X, Send, MapPin, Star, ExternalLink, MessageSquare,
   Loader2, Compass, Quote, ChevronDown, Tag, AlertTriangle, Lock,
-  Shuffle,
+  Shuffle, Clock, Pin, Trash2, ChevronRight,
 } from "lucide-react";
 import {
   astralSuggest,
   astralDraftInvite,
   updateGroup,
   updateMember,
+  listAstralHistory,
+  deleteAstralRound,
+  clearAstralHistory,
+  updateRemixDefaults,
 } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
 import { LockInModal } from "./Hangouts";
@@ -83,6 +87,13 @@ export default function AstralDrawer({
   const [remixHint, setRemixHint] = useState("");
   const [remixing, setRemixing] = useState(false);
 
+  // Persisted per-group history of Astral rounds. Loaded on drawer open.
+  // Used both to seed `shownCards` (so remix never repeats venues across
+  // sessions) and to render the "Recent rounds" panel.
+  const [history, setHistory] = useState([]); // newest-first
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [savingDefaults, setSavingDefaults] = useState(false);
+
   // Lock-in flow — Phase 4 commitment ladder.
   const [lockInCard, setLockInCard] = useState(null);
 
@@ -116,23 +127,45 @@ export default function AstralDrawer({
     return () => clearInterval(t);
   }, [loading, LOADING_LINES.length]);
 
-  // Reset transient state when re-opening.
+  // Reset transient state when re-opening, then load persisted history
+  // and seed the remix chips/hint from the group's saved defaults.
   const lastOpenRef = useRef(false);
   useEffect(() => {
     if (open && !lastOpenRef.current) {
       setResult(null);
       setErrMsg(null);
       setDrafts({});
-      setShownCards([]);
-      setRemixPresets([]);
-      setRemixHint("");
+      setRemixHint(group?.remix_defaults?.hint || "");
+      setRemixPresets(group?.remix_defaults?.presets || []);
+      setHistoryOpen(false);
       // Clear any stale typed window first; if a context-provided suggestedWindow
       // exists (e.g. user clicked a heatmap cell that pre-selected a slot),
       // seed it so the user doesn't have to retype.
       setWindowBlurb(suggestedWindow || "");
+      // Pull the last 30 rounds from the server. Use them to seed `shownCards`
+      // — Astral will then never repeat ANY venue we've ever shown this group.
+      if (group?.code) {
+        listAstralHistory(group.code, 30)
+          .then((data) => {
+            const rounds = data?.rounds || [];
+            setHistory(rounds);
+            const seenCards = [];
+            for (const r of rounds) {
+              for (const c of r.cards || []) seenCards.push(c);
+            }
+            setShownCards(seenCards);
+          })
+          .catch(() => {
+            setHistory([]);
+            setShownCards([]);
+          });
+      } else {
+        setShownCards([]);
+        setHistory([]);
+      }
     }
     lastOpenRef.current = open;
-  }, [open, suggestedWindow]);
+  }, [open, suggestedWindow, group?.code, group?.remix_defaults]);
 
   if (!open) return null;
 
@@ -154,6 +187,7 @@ export default function AstralDrawer({
         location_override:
           (locationOverride || myLocation || "").trim() || null,
         history_blurb: (historyBlurb || "").trim() || null,
+        member_id: memberId || null,
       });
       if (!out.cards || out.cards.length === 0) {
         setErrMsg(
@@ -161,10 +195,14 @@ export default function AstralDrawer({
         );
       }
       setResult(out);
-      // Reset accumulated history on a fresh ask — start a new "round".
-      setShownCards(out.cards || []);
-      setRemixPresets([]);
-      setRemixHint("");
+      // Append to accumulated shown so subsequent remixes never repeat these.
+      setShownCards((prev) => [...prev, ...(out.cards || [])]);
+      // Refresh history from server so the new round appears in the panel.
+      if (group?.code && out.cards?.length) {
+        listAstralHistory(group.code, 30)
+          .then((d) => setHistory(d?.rounds || []))
+          .catch(() => {});
+      }
     } catch (err) {
       console.error(err);
       setErrMsg(
@@ -199,6 +237,7 @@ export default function AstralDrawer({
         previous_cards: shownCards,
         remix_presets: remixPresets,
         remix_hint: remixHint.trim() || null,
+        member_id: memberId || null,
       });
       if (!out.cards || out.cards.length === 0) {
         setErrMsg("astral couldn't remix that one. tweak the hint and try again.");
@@ -209,6 +248,11 @@ export default function AstralDrawer({
       // Clear the hint so the chips are ready for a new round; keep presets
       // selected so a quick "remix again" honors the same vibe by default.
       setRemixHint("");
+      if (group?.code && out.cards?.length) {
+        listAstralHistory(group.code, 30)
+          .then((d) => setHistory(d?.rounds || []))
+          .catch(() => {});
+      }
     } catch (err) {
       console.error(err);
       setErrMsg("couldn't remix. try again in a sec.");
@@ -221,6 +265,67 @@ export default function AstralDrawer({
     setRemixPresets((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
+
+  // Save the currently-selected chips + hint as the group's sticky default
+  // so future drawer opens (for any member) start with this vibe pre-selected.
+  const onSaveAsDefault = async () => {
+    if (!group?.code) return;
+    setSavingDefaults(true);
+    try {
+      const out = await updateRemixDefaults(group.code, {
+        presets: remixPresets,
+        hint: remixHint.trim() || null,
+      });
+      // Bubble the new defaults up so other components see them too.
+      onGroupUpdate?.({ ...group, remix_defaults: out.remix_defaults });
+      toast.success("saved as group default");
+    } catch (err) {
+      console.error(err);
+      toast.error("couldn't save defaults");
+    } finally {
+      setSavingDefaults(false);
+    }
+  };
+
+  // Reopen a past round as the current result (so you can remix from there).
+  const onResumeRound = (round) => {
+    if (!round) return;
+    setResult({
+      intro: round.intro || "",
+      cards: round.cards || [],
+      used_location: round.used_location || null,
+      participant_count: 0,
+      was_remix: !!round.was_remix,
+    });
+    setWindowBlurb(round.window_blurb || "");
+    setHistoryOpen(false);
+    setErrMsg(null);
+  };
+
+  const onDeleteRound = async (round_id) => {
+    if (!group?.code) return;
+    try {
+      await deleteAstralRound(group.code, round_id);
+      setHistory((prev) => prev.filter((r) => r.id !== round_id));
+    } catch (err) {
+      console.error(err);
+      toast.error("couldn't delete round");
+    }
+  };
+
+  const onClearHistory = async () => {
+    if (!group?.code) return;
+    if (!window.confirm("clear all astral history for this group? remix will start repeating venues again.")) return;
+    try {
+      await clearAstralHistory(group.code);
+      setHistory([]);
+      setShownCards([]);
+      toast.success("history cleared");
+    } catch (err) {
+      console.error(err);
+      toast.error("couldn't clear history");
+    }
+  };
 
   const onDraft = async (card) => {
     setDrafting(card.id);
@@ -377,6 +482,94 @@ export default function AstralDrawer({
               />
             )}
           </div>
+
+          {/* Recent rounds — persisted history of Astral suggestions for
+              this group. Click a round to resume it as the current result;
+              the X button removes that round; the "clear all" link nukes
+              everything. Drives the "remix never repeats" guarantee — every
+              card we've ever shown this group seeds shownCards on open. */}
+          {history.length > 0 && (
+            <div className="neo-card p-3" data-testid="astral-history-panel">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 group"
+                data-testid="astral-history-toggle"
+              >
+                <span className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span className="font-heading font-black text-sm">
+                    Recent rounds
+                  </span>
+                  <span className="text-[0.6rem] uppercase tracking-wider font-bold opacity-60">
+                    {history.length}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${historyOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {historyOpen && (
+                <div className="mt-3 space-y-2">
+                  {history.slice(0, 8).map((r) => {
+                    const firstVenue = (r.cards || [])[0]?.venue || "(no venues)";
+                    const dt = (r.created_at || "").slice(0, 10);
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex items-start gap-2 p-2 rounded-lg border-2 border-slate-900 bg-white hover:bg-[var(--pastel-mint)] transition"
+                        data-testid={`astral-history-row-${r.id}`}
+                      >
+                        <button
+                          type="button"
+                          className="flex-1 text-left"
+                          onClick={() => onResumeRound(r)}
+                          data-testid={`astral-history-resume-${r.id}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Pin className="w-3 h-3" />
+                            <span className="font-heading font-bold text-xs truncate">
+                              {r.window_blurb || "untitled window"}
+                            </span>
+                            {r.was_remix && (
+                              <span className="text-[0.55rem] uppercase tracking-wider font-bold opacity-60">
+                                remix
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[0.7rem] opacity-70 truncate flex items-center gap-1">
+                            <ChevronRight className="w-3 h-3" />
+                            {firstVenue}
+                            {(r.cards || []).length > 1 && ` +${r.cards.length - 1} more`}
+                            <span className="opacity-50 ml-1">· {dt}</span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteRound(r.id)}
+                          className="w-6 h-6 grid place-items-center rounded-md hover:bg-[var(--pastel-peach)] opacity-60 hover:opacity-100"
+                          aria-label="Delete round"
+                          data-testid={`astral-history-delete-${r.id}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {history.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={onClearHistory}
+                      className="text-[0.65rem] font-bold uppercase tracking-wider opacity-60 hover:opacity-100"
+                      data-testid="astral-history-clear"
+                    >
+                      clear all history
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Ask form */}
           <form onSubmit={onAsk} className="neo-card p-4 space-y-3" data-testid="astral-ask-form">
@@ -566,6 +759,30 @@ export default function AstralDrawer({
                       </>
                     )}
                   </button>
+
+                  {/* Save current chip+hint combination as the group's sticky
+                      default — next time anyone in the crew opens the drawer,
+                      these chips and hint will be pre-selected. */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={onSaveAsDefault}
+                      disabled={savingDefaults || (remixPresets.length === 0 && !remixHint.trim())}
+                      className="text-[0.65rem] font-bold uppercase tracking-wider opacity-70 hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                      data-testid="remix-save-default-btn"
+                    >
+                      {savingDefaults ? "saving…" : "save as group default"}
+                    </button>
+                    {(group?.remix_defaults?.presets?.length > 0 ||
+                      group?.remix_defaults?.hint) && (
+                      <span
+                        className="text-[0.55rem] uppercase tracking-wider font-bold opacity-50"
+                        data-testid="remix-defaults-indicator"
+                      >
+                        defaults set
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 

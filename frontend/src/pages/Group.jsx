@@ -71,6 +71,40 @@ export default function GroupPage() {
     });
   }, [code, tab, rangeStart, rangeEnd, hourFrom, hourTo, minuteStep, focusMemberIds]);
 
+  // Inject per-group Open Graph meta tags into the document head so when
+  // someone pastes the /g/{code} link in iMessage / Slack / Discord they
+  // get a personalized unfurl card (group name + member count + invite code).
+  // We replace the default sitewide og:image / og:title from public/index.html
+  // and restore them when the page unmounts.
+  useEffect(() => {
+    if (!group?.code) return;
+    const back = (import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+    const ogImage = `${back}/api/og/${group.code}.png`;
+    const ogTitle = `${group.name || "Planit"} — Planit`;
+    const memberCount = (group.members || []).length;
+    const ogDesc = `${memberCount} ${memberCount === 1 ? "person" : "people"} synced. Tap to drop your free time and see when the crew overlaps.`;
+    const apply = (sel, attr, val) => {
+      const tag = document.querySelector(sel);
+      if (tag) tag.setAttribute(attr, val);
+    };
+    apply('meta[property="og:image"]', "content", ogImage);
+    apply('meta[name="twitter:image"]', "content", ogImage);
+    apply('meta[property="og:title"]', "content", ogTitle);
+    apply('meta[name="twitter:title"]', "content", ogTitle);
+    apply('meta[property="og:description"]', "content", ogDesc);
+    apply('meta[name="twitter:description"]', "content", ogDesc);
+    apply('meta[property="og:url"]', "content", typeof window !== "undefined" ? window.location.href : "");
+    document.title = `${group.name || "Planit"} · Planit`;
+    return () => {
+      // Restore default sitewide meta when leaving the group page.
+      apply('meta[property="og:image"]', "content", `${back}/api/og.png`);
+      apply('meta[name="twitter:image"]', "content", `${back}/api/og.png`);
+      apply('meta[property="og:title"]', "content", "Planit — sync the crew's free time");
+      apply('meta[name="twitter:title"]', "content", "Planit — sync the crew's free time");
+      document.title = "Planit";
+    };
+  }, [group?.code, group?.name, group?.members]);
+
   // Refresh "now" once a minute so live-status bubbles stay accurate.
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60 * 1000);
@@ -232,17 +266,31 @@ export default function GroupPage() {
           </button>
           <div className="shrink-0">
             <div className="label-caps" style={{ color: "var(--ink-mute)" }}>Group</div>
-            <GroupMenu
-              group={group}
-              onRenamed={(name) => setGroup((g) => ({ ...g, name }))}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <GroupMenu
+                group={group}
+                onRenamed={(name) => setGroup((g) => ({ ...g, name }))}
+                onRecurrenceChange={(kind) =>
+                  setGroup((g) => ({ ...g, recurrence_kind: kind }))
+                }
+              />
+              {group.recurrence_kind && group.recurrence_kind !== "none" && (
+                <span
+                  className="px-2 py-0.5 rounded-full border-2 border-slate-900 text-[0.55rem] uppercase tracking-wider font-bold font-heading bg-[var(--pastel-lavender)]"
+                  data-testid="recurrence-badge"
+                  title={`This is a ${group.recurrence_kind} recurring crew.`}
+                >
+                  ↻ {group.recurrence_kind}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Spacer pushes the right cluster to the opposite edge. */}
           <div className="flex-1 min-w-[16px]" />
 
           {/* Right cluster — segmented view-tabs + (optional) Editing badge + theme toggle. */}
-          <div className="flex items-center gap-3" data-testid="view-tabs">
+          <div className="flex items-center gap-2 sm:gap-3" data-testid="view-tabs">
             <div
               className="inline-flex border-2 border-slate-900 rounded-full overflow-hidden"
               style={{ boxShadow: "2px 2px 0 0 var(--ink)" }}
@@ -256,7 +304,9 @@ export default function GroupPage() {
                     : "bg-white hover:bg-[var(--pastel-mint)]"
                 }`}
               >
-                Sync Our Orbits
+                {/* Shorter label on mobile, full on desktop. */}
+                <span className="sm:hidden">Orbits</span>
+                <span className="hidden sm:inline">Sync Our Orbits</span>
               </button>
               <button
                 onClick={() => { setTab("members"); setEditMode(false); }}
@@ -267,7 +317,8 @@ export default function GroupPage() {
                     : "bg-white hover:bg-[var(--pastel-mint)]"
                 }`}
               >
-                Members' schedule
+                <span className="sm:hidden">Members</span>
+                <span className="hidden sm:inline">Members' schedule</span>
               </button>
             </div>
             {editMode && (
@@ -282,8 +333,12 @@ export default function GroupPage() {
           </div>
         </div>
 
-        {/* Row 2 — action buttons stretched edge-to-edge, larger hit-target. */}
-        <div className="mt-4 flex items-stretch gap-4" data-testid="action-row">
+        {/* Row 2 — action buttons. On mobile (<sm) this becomes a 2x2 grid so
+            the buttons stay tappable; on >= sm they stretch single-row. */}
+        <div
+          className="mt-4 grid grid-cols-2 sm:flex sm:items-stretch gap-2 sm:gap-3"
+          data-testid="action-row"
+        >
           <SuggestMeeting
             members={visibleMembers}
             columns={columns}

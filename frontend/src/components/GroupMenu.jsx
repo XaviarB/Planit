@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Edit3, Plus, Check, X, LogOut, Repeat, Sliders } from "lucide-react";
-import { createGroup, updateGroup, leaveGroup, setLocalMemberId, addVisitedGroup, getVisitedGroups, removeVisitedGroup, clearLocalMemberId, getLocalMemberId, updateRecurrence } from "../lib/api";
+import { ChevronDown, Edit3, Plus, Check, X, LogOut, Sliders } from "lucide-react";
+import { createGroup, updateGroup, leaveGroup, setLocalMemberId, addVisitedGroup, getVisitedGroups, removeVisitedGroup, clearLocalMemberId, getLocalMemberId } from "../lib/api";
 import { toast } from "sonner";
 
 /**
@@ -168,17 +168,6 @@ export default function GroupMenu({ group, onRenamed, onRecurrenceChange }) {
                 testId="menu-create-btn"
               />
               <MenuItem
-                icon={<Repeat className="w-4 h-4" />}
-                label="Recurring schedule…"
-                onClick={() => setMode("recurrence")}
-                testId="menu-recurrence-btn"
-                hint={
-                  group.recurrence_kind && group.recurrence_kind !== "none"
-                    ? group.recurrence_kind
-                    : "off"
-                }
-              />
-              <MenuItem
                 icon={<LogOut className="w-4 h-4" />}
                 label="Leave this group"
                 onClick={() => setMode("leave")}
@@ -334,51 +323,11 @@ export default function GroupMenu({ group, onRenamed, onRecurrenceChange }) {
             <div data-testid="recurrence-panel" className="space-y-2">
               <div className="label-caps mb-1">Recurring schedule</div>
               <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>
-                For weekly crews — show day-of-week columns instead of calendar
-                dates so the heatmap rolls forever.
+                Recurrence is now configured automatically when you use the
+                in-editor "recurring busy" parser. This panel is no longer in
+                the menu — kept here only to avoid a dead link if anything
+                deep-links to it.
               </p>
-              {[
-                { kind: "none", label: "Off (calendar dates)" },
-                { kind: "weekly", label: "Weekly" },
-                { kind: "biweekly", label: "Bi-weekly" },
-              ].map(({ kind, label }) => {
-                const active = (group.recurrence_kind || "none") === kind;
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    data-testid={`recurrence-opt-${kind}`}
-                    disabled={busy || active}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        await updateRecurrence(group.code, kind);
-                        onRecurrenceChange?.(kind);
-                        toast.success(
-                          kind === "none"
-                            ? "switched to calendar mode"
-                            : `set to ${kind}`
-                        );
-                        setMode(null);
-                        setOpen(false);
-                      } catch (err) {
-                        console.error(err);
-                        toast.error("couldn't update");
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border-2 border-slate-900 text-sm font-bold font-heading ${
-                      active
-                        ? "bg-slate-900 text-white"
-                        : "bg-white hover:bg-[var(--pastel-mint)]"
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {active && <Check className="w-4 h-4" />}
-                  </button>
-                );
-              })}
               <button
                 type="button"
                 onClick={() => setMode(null)}

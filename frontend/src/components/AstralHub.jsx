@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, X, Send, Shuffle, Clock, History, Wand2,
   ArrowRight, ArrowLeft, Loader2, RotateCw, Maximize2,
+  Settings, Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import AstralDrawer from "./AstralDrawer";
@@ -41,7 +42,7 @@ export default function AstralHub({
   code,
   onGroupRefresh,
 }) {
-  const [mode, setMode] = useState("menu"); // "menu" | "loading" | "results"
+  const [mode, setMode] = useState("menu"); // "menu" | "loading" | "results" | "settings"
   const [windowBlurb, setWindowBlurb] = useState("");
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState(null);
@@ -53,6 +54,42 @@ export default function AstralHub({
   const [astralIntent, setAstralIntent] = useState(null);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [toolsIntent, setToolsIntent] = useState(null);
+
+  // ---- per-user astral persona override (kept in localStorage, never on
+  // the server). Each member tunes Astral's voice for themselves; the
+  // group-wide persona stays intact and acts as the fallback baseline.
+  const personaKey = `planit:astral-personal:${group?.code || code || ""}`;
+  const [personalPersona, setPersonalPersona] = useState(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(personaKey) : null;
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  // Re-read when the group changes (e.g. user navigates between groups).
+  useEffect(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(personaKey) : null;
+      setPersonalPersona(raw ? JSON.parse(raw) : null);
+    } catch {
+      setPersonalPersona(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.code]);
+
+  const savePersonalPersona = (next) => {
+    setPersonalPersona(next);
+    try {
+      if (next && Object.keys(next).length > 0) {
+        localStorage.setItem(personaKey, JSON.stringify(next));
+      } else {
+        localStorage.removeItem(personaKey);
+      }
+    } catch {
+      // localStorage unavailable — silent.
+    }
+  };
 
   const inputRef = useRef(null);
   const blockRef = useRef(null);
@@ -91,7 +128,7 @@ export default function AstralHub({
     const onKey = (e) => {
       if (e.key === "Escape" && !astralOpen && !toolsOpen) {
         if (mode !== "menu") {
-          // ESC steps back from results → menu first
+          // ESC steps back from results / settings → menu first
           setMode("menu");
           setResult(null);
           setErrMsg(null);
@@ -155,6 +192,12 @@ export default function AstralHub({
         window_blurb: windowBlurb.trim(),
         max_options: 3,
         creativity: 0.7,
+        // Per-user persona override (from the in-hub settings tile).
+        // Anything missing falls back to the group's astral_persona.
+        astral_persona_override:
+          personalPersona && Object.keys(personalPersona).length > 0
+            ? personalPersona
+            : null,
         // Hub doesn't expose history-blurb / overrides — drawer is for that.
       });
       setResult({
@@ -310,10 +353,20 @@ export default function AstralHub({
                     setToolsOpen(true);
                     onClose && onClose();
                   }}
+                  openSettings={() => setMode("settings")}
                 />
               )}
 
               {mode === "loading" && <LoadingBody />}
+
+              {mode === "settings" && (
+                <SettingsBody
+                  group={group}
+                  personalPersona={personalPersona}
+                  onSave={savePersonalPersona}
+                  onBack={() => setMode("menu")}
+                />
+              )}
 
               {mode === "results" && result && (
                 <ResultsBody
@@ -397,7 +450,7 @@ export default function AstralHub({
 
 function MenuBody({
   inputRef, windowBlurb, setWindowBlurb, submitAsk, errMsg,
-  isMac, tile, openDrawer, openTools,
+  isMac, tile, openDrawer, openTools, openSettings,
 }) {
   return (
     <div className="px-4 pt-4 pb-4 space-y-4">
@@ -488,6 +541,14 @@ function MenuBody({
           accent: "var(--pastel-yellow)",
           testId: "hub-tile-tools",
           onClick: () => openTools(null),
+        })}
+        {tile({
+          icon: Settings,
+          title: "settings",
+          hint: "tune astral — tone, voice, emojis, default area",
+          accent: "var(--pastel-sky, #e0f2fe)",
+          testId: "hub-tile-settings",
+          onClick: openSettings,
         })}
       </div>
 
@@ -648,6 +709,212 @@ function ResultsBody({
 // ── helpers ──
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SettingsBody — per-USER astral persona override.
+// Stored in localStorage as `planit:astral-personal:{groupCode}` and shipped
+// to the backend on every suggest call as `astral_persona_override`. The
+// group's shared persona stays untouched — this is just one member's tuning.
+// ─────────────────────────────────────────────────────────────────────────
+function SettingsBody({ group, personalPersona, onSave, onBack }) {
+  // Hydrate working copy from saved personal override, falling back to the
+  // group baseline so users see what's currently in effect.
+  const baseline = group?.astral_persona || {};
+  const initial = {
+    tone: baseline.tone || "edgy",
+    lowercase: baseline.lowercase !== false,
+    emoji_on: baseline.emoji_on !== false,
+    default_location: baseline.default_location || "",
+    ...(personalPersona || {}),
+  };
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = () => {
+    setSaving(true);
+    // Save only the keys that differ from the baseline so the override stays
+    // sparse — the backend will shallow-merge it onto the group persona.
+    const next = {};
+    if (draft.tone && draft.tone !== baseline.tone) next.tone = draft.tone;
+    if (draft.lowercase !== (baseline.lowercase !== false)) next.lowercase = draft.lowercase;
+    if (draft.emoji_on !== (baseline.emoji_on !== false)) next.emoji_on = draft.emoji_on;
+    if ((draft.default_location || "") !== (baseline.default_location || "")) {
+      next.default_location = draft.default_location || "";
+    }
+    onSave(next);
+    setTimeout(() => setSaving(false), 350);
+    toast.success("astral settings saved");
+    onBack();
+  };
+
+  const handleReset = () => {
+    setDraft({
+      tone: baseline.tone || "edgy",
+      lowercase: baseline.lowercase !== false,
+      emoji_on: baseline.emoji_on !== false,
+      default_location: baseline.default_location || "",
+    });
+    onSave(null);
+    toast.success("reset to group defaults");
+    onBack();
+  };
+
+  const Toggle = ({ value, onChange, testId }) => (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`relative w-10 h-5 rounded-full border-2 border-slate-900 transition shrink-0 ${
+        value ? "bg-slate-900" : "bg-white"
+      }`}
+      data-testid={testId}
+      aria-pressed={value}
+    >
+      <span
+        className={`absolute top-0.5 ${value ? "left-[16px]" : "left-0.5"} w-3 h-3 rounded-full transition ${
+          value ? "bg-white" : "bg-slate-900"
+        }`}
+      />
+    </button>
+  );
+
+  return (
+    <div className="px-4 py-3 space-y-4" data-testid="hub-settings-panel">
+      {/* Header strip with back arrow */}
+      <div className="flex items-center gap-2 -mx-4 -mt-3 px-4 py-2 border-b-2 border-slate-900/15">
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-yellow)] transition shrink-0"
+          aria-label="Back to menu"
+          data-testid="hub-settings-back"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2.5} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="label-caps text-[9px]" style={{ color: "var(--ink-mute)" }}>
+            astral · my settings
+          </div>
+          <div className="font-heading font-black text-sm leading-tight lowercase">
+            tune your astral
+          </div>
+        </div>
+        <span
+          className="text-[9px] uppercase tracking-wider font-extrabold px-2 py-1 rounded-full border-2 border-slate-900 bg-[var(--pastel-mint)] shrink-0"
+          title="Only this device sees these — group persona stays intact"
+        >
+          just for you
+        </span>
+      </div>
+
+      {/* Tone */}
+      <div>
+        <div className="label-caps text-[10px] mb-1.5" style={{ color: "var(--ink-mute)" }}>
+          tone
+        </div>
+        <div
+          className="grid grid-cols-4 gap-1.5"
+          data-testid="hub-settings-tone"
+        >
+          {[
+            { value: "edgy", label: "edgy" },
+            { value: "warm", label: "warm" },
+            { value: "minimal", label: "minimal" },
+            { value: "hype", label: "hype" },
+          ].map((opt) => {
+            const isActive = draft.tone === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setDraft({ ...draft, tone: opt.value })}
+                className={`px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-full border-2 border-slate-900 transition ${
+                  isActive
+                    ? "bg-slate-900 text-white"
+                    : "bg-white hover:bg-[var(--pastel-mint)]"
+                }`}
+                data-testid={`hub-settings-tone-${opt.value}`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Lowercase */}
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="min-w-0">
+          <div className="text-sm font-bold lowercase">lowercase voice</div>
+          <div className="text-[11px] leading-snug" style={{ color: "var(--ink-mute)" }}>
+            keep all replies in lowercase (the canonical astral vibe).
+          </div>
+        </div>
+        <Toggle
+          value={!!draft.lowercase}
+          onChange={(v) => setDraft({ ...draft, lowercase: v })}
+          testId="hub-settings-lowercase"
+        />
+      </div>
+
+      {/* Emojis */}
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="min-w-0">
+          <div className="text-sm font-bold lowercase">allow emojis</div>
+          <div className="text-[11px] leading-snug" style={{ color: "var(--ink-mute)" }}>
+            let astral sprinkle emojis in suggestions and invites.
+          </div>
+        </div>
+        <Toggle
+          value={!!draft.emoji_on}
+          onChange={(v) => setDraft({ ...draft, emoji_on: v })}
+          testId="hub-settings-emoji"
+        />
+      </div>
+
+      {/* Default location */}
+      <div>
+        <div className="label-caps text-[10px] mb-1.5" style={{ color: "var(--ink-mute)" }}>
+          default location
+        </div>
+        <input
+          type="text"
+          value={draft.default_location || ""}
+          onChange={(e) => setDraft({ ...draft, default_location: e.target.value })}
+          placeholder="e.g. Brooklyn, NY"
+          className="neo-input w-full text-sm"
+          data-testid="hub-settings-location"
+        />
+        <div className="text-[10px] mt-1 leading-snug" style={{ color: "var(--ink-mute)" }}>
+          used when you don't supply a location in the ask. blank = fall back to
+          the group base.
+        </div>
+      </div>
+
+      {/* Action row */}
+      <div className="grid grid-cols-2 gap-2 pt-2 sticky bottom-0 -mx-4 -mb-3 px-4 py-3 border-t-2 border-slate-900/15 bg-[var(--card)]">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="neo-btn ghost text-xs flex items-center justify-center gap-1.5"
+          data-testid="hub-settings-reset"
+        >
+          <RotateCw className="w-3.5 h-3.5" />
+          reset
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="neo-btn pastel text-xs font-heading font-extrabold flex items-center justify-center gap-1.5 disabled:opacity-50"
+          data-testid="hub-settings-save"
+        >
+          <Save className="w-3.5 h-3.5" />
+          {saving ? "saving…" : "save"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // Re-export for any external consumer that wants the spark icon shorthand.

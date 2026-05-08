@@ -155,8 +155,8 @@ def _safe_json_loads(s: str) -> Any:
 # 1. parse_busy_text                                                          #
 # --------------------------------------------------------------------------- #
 
-PARSE_BUSY_INSTRUCTIONS = """convert a person's free-form description of when
-they're busy into a list of structured slots that planit understands.
+PARSE_BUSY_INSTRUCTIONS_DATE = """convert a person's free-form description of
+when they're busy into a list of structured slots that planit understands.
 
 slot shape (this is exact):
   {{
@@ -181,12 +181,54 @@ rules:
 - ignore mood/reason words ("for finals", "because work") — reason_id stays null.
 """
 
+PARSE_BUSY_INSTRUCTIONS_WEEKLY = """convert a person's free-form RECURRING busy
+description into weekly recurring slots planit can paint onto every week.
 
-async def parse_busy_text(text: str, anchor_iso: str) -> List[Dict[str, Any]]:
+slot shape (this is exact):
+  {{
+    "mode": "weekly",
+    "key":  "d0" | "d1" | "d2" | "d3" | "d4" | "d5" | "d6",
+    "hour": 0..23,
+    "minute": 0,
+    "step": 60,
+    "status": "busy",
+    "reason_id": null
+  }}
+
+day-key cheat sheet:
+  d0 = monday, d1 = tuesday, d2 = wednesday, d3 = thursday,
+  d4 = friday,  d5 = saturday, d6 = sunday.
+
+rules:
+- output ONLY a single JSON array of slot objects. no prose. no markdown fence.
+- one slot per (day, hour). do not collapse into ranges. so 2pm-6pm on a
+  single day = 4 separate slots: hour 14, 15, 16, 17.
+- "all week" / "every day" → d0..d6.
+- "weekdays" / "mon-fri" → d0..d4.
+- "weekends" → d5, d6.
+- ranges like "mon to thu" → d0, d1, d2, d3.
+- if no day is specified but a time is, assume "all weekdays" (d0..d4).
+- if input is ambiguous or empty, return [].
+- ignore mood/reason words ("for school", "because work") — reason_id stays null.
+- cap output at 200 slots.
+"""
+
+
+async def parse_busy_text(
+    text: str,
+    anchor_iso: str,
+    mode: str = "date",
+) -> List[Dict[str, Any]]:
     """Natural-language busy entry. Returns list of slot dicts. Empty list on
-    failure — never raises."""
+    failure — never raises.
+
+    mode="date"   → produces date-anchored slots (one-off "I'm busy this Tuesday")
+    mode="weekly" → produces weekly-recurring slots ("working all week 2-6pm")
+    """
     if not text or not text.strip():
         return []
+
+    is_weekly = mode == "weekly"
 
     try:
         anchor = datetime.fromisoformat(anchor_iso[:10])
@@ -194,11 +236,19 @@ async def parse_busy_text(text: str, anchor_iso: str) -> List[Dict[str, Any]]:
         anchor = datetime.utcnow()
     weekday = anchor.strftime("%A").lower()
 
+    if is_weekly:
+        body = PARSE_BUSY_INSTRUCTIONS_WEEKLY
+    else:
+        body = PARSE_BUSY_INSTRUCTIONS_DATE.format(
+            today_iso=anchor.date().isoformat(),
+            today_weekday=weekday,
+        )
+
     sys = (
         ASTRAL_PERSONA
         + "\n\n---\n\nright now you're parsing busy text — switch off the persona "
         + "and act as a strict json formatter. the user's voice goes in, slots come out.\n\n"
-        + PARSE_BUSY_INSTRUCTIONS.format(today_iso=anchor.date().isoformat(), today_weekday=weekday)
+        + body
     )
     chat = _new_chat(sys, "parse-busy")
 
@@ -213,19 +263,34 @@ async def parse_busy_text(text: str, anchor_iso: str) -> List[Dict[str, Any]]:
         return []
 
     out: List[Dict[str, Any]] = []
+    valid_weekly_keys = {f"d{i}" for i in range(7)}
     for raw in data[:200]:
         try:
+            raw_mode = str(raw.get("mode", "weekly" if is_weekly else "date"))
+            # Defensive: if caller asked for weekly but model emitted "date",
+            # try to coerce; otherwise drop.
+            if is_weekly and raw_mode != "weekly":
+                continue
+            if not is_weekly and raw_mode != "date":
+                continue
+
+            key = str(raw.get("key", ""))
+            if is_weekly:
+                if key not in valid_weekly_keys:
+                    continue
+            else:
+                key = key[:10]
+                datetime.fromisoformat(key)  # bounds check — raises on bad date
+
             slot = {
-                "mode": "date",
-                "key": str(raw.get("key", ""))[:10],
+                "mode": raw_mode,
+                "key": key,
                 "hour": int(raw.get("hour", 0)),
                 "minute": int(raw.get("minute", 0) or 0),
                 "step": int(raw.get("step", 60) or 60),
                 "status": "busy",
                 "reason_id": raw.get("reason_id") or None,
             }
-            # Sanity bounds.
-            datetime.fromisoformat(slot["key"])
             if not (0 <= slot["hour"] <= 23):
                 continue
             if slot["minute"] not in (0, 15, 30, 45):

@@ -992,6 +992,107 @@ frontend:
           - member.prefs: fab_side="right", theme="auto", compact=false, hidden_panels=[]
           All documented defaults match specification. Legacy document compatibility ensured.
 
+  - task: "Phase-6: parse-busy mode parameter (date | weekly)"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/astral.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Extended POST /api/groups/{code}/astral/parse-busy to accept optional `mode` field.
+          mode="date" (default) → date-anchored slots like before (YYYY-MM-DD keys).
+          mode="weekly" → weekly-recurring slots keyed d0..d6 (d0=Mon, d6=Sun).
+          Used by the in-editor "Recurring busy" parser. Returns {slots, count, mode}.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 parse-busy mode scenarios passed:
+          
+          TEST A: mode="weekly" with "working all week 2pm to 6pm"
+          - Returned 28 slots (7 days × 4 hours)
+          - All slots have mode="weekly", status="busy"
+          - All keys in {d0..d6} (valid weekday keys)
+          - All hours in [14, 17] (2pm-6pm range)
+          
+          TEST B: mode="weekly" with "weekdays 9 to 5"
+          - All slots are weekdays only (d0-d4)
+          - No weekend slots (d5, d6)
+          - All hours in [9, 16] (9am-5pm range)
+          
+          TEST C: mode="date" with "I'm busy this Saturday from 6pm to 9pm"
+          - mode="date" returned correctly
+          - All slots have mode="date"
+          - All keys are ISO dates (YYYY-MM-DD format)
+          - All hours in [18, 20] (6pm-9pm range)
+          
+          TEST D: mode="weekly" with empty text ""
+          - Returns {slots:[], count:0, mode:"weekly"} (never 500)
+          - Graceful handling of empty input
+          
+          TEST E: mode="garbage" (invalid)
+          - Returns 200 OK (no 500 error)
+          - Defaults to mode="date" as expected
+          
+          All validation working correctly. Mode parameter fully functional.
+
+  - task: "Phase-6: astral_persona_override on suggest endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/astral.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Extended POST /api/groups/{code}/astral/suggest to accept optional
+          `astral_persona_override` (dict). Shallow-merges per-user persona keys
+          onto the group's astral_persona before calling suggest_hangouts.
+          Allowed keys: display_name, tone, lowercase, emoji_on, default_location.
+          Empty/None values fall through to group baseline. default_location override
+          also feeds the location resolution chain (request → override → group base).
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 6 astral_persona_override scenarios passed:
+          
+          TEST F: Basic suggest without override
+          - Returns 200 OK with intro and cards[]
+          - Response shape validated (intro, cards, used_location, participant_count)
+          - Cards returned successfully
+          
+          TEST G: suggest with astral_persona_override = {"tone": "warm"}
+          - Returns 200 OK with cards[]
+          - Persona merge doesn't break suggest call
+          - Tone override applied internally (no errors)
+          
+          TEST H: suggest with astral_persona_override = {"default_location": "Brooklyn, NY"}
+          - Group created WITHOUT location field
+          - Returns 200 OK with cards[]
+          - used_location reflects override ("Brooklyn, NY")
+          - Location chain wiring works correctly (override → group base fallback)
+          
+          TEST I: suggest with astral_persona_override = {}
+          - Returns 200 OK with cards[]
+          - Works same as no override (empty dict ignored)
+          
+          TEST J: suggest with astral_persona_override = null
+          - Returns 200 OK with cards[]
+          - Works same as no override (null ignored)
+          
+          TEST K: suggest with unknown keys {"foo": "bar", "unknown_field": "..."}
+          - Returns 200 OK (no 500 error)
+          - Unknown keys silently ignored as expected
+          - Only allowed keys (display_name, tone, lowercase, emoji_on, default_location) processed
+          
+          All persona override scenarios working correctly. Shallow merge logic validated.
+          Gemini API calls completed in 10-25s range.
+
 metadata:
   created_by: "main_agent"
   version: "1.4"
@@ -1003,6 +1104,38 @@ test_plan:
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Phase-6 customise overhaul shipped. Backend changes:
+      
+      1) `POST /api/groups/{code}/astral/parse-busy` now accepts `mode`
+         field. mode="date" (default) → date-anchored slots like before.
+         mode="weekly" → weekly-recurring slots keyed d0..d6 (mon..sun).
+         Used by the in-editor "Recurring busy" parser. Validation:
+         - Coerces invalid keys to drop. Rejects mismatched modes.
+         - Returns {slots, count, mode} on success.
+      
+      2) `POST /api/groups/{code}/astral/suggest` now accepts optional
+         `astral_persona_override` (dict). Shallow-merges per-user persona
+         keys onto the group's astral_persona before calling
+         suggest_hangouts. Allowed keys: display_name, tone, lowercase,
+         emoji_on, default_location. Empty/None values fall through to the
+         group baseline. default_location override also feeds the location
+         resolution chain (request → override → group base).
+      
+      Please backend-test BOTH endpoints with happy + sad paths:
+      - parse-busy mode=weekly with "working all week 2pm to 6pm"
+        → expect ~28 weekly slots, all d0..d6, hour in 14..17
+      - parse-busy mode=weekly with "weekdays 9-5" → d0..d4, hour 9..16
+      - parse-busy mode=date (legacy) still works
+      - suggest with astral_persona_override.tone="warm" → 200 OK
+      - suggest with override.default_location="Brooklyn, NY" overriding
+        empty group location → reflected in result.location_blurb
+      - suggest with override=None / empty dict → unchanged behaviour
+      
+      No frontend testing needed yet — main agent will ask user before that.
 
 agent_communication:
   - agent: "testing"
@@ -1500,3 +1633,39 @@ agent_communication:
       - 404 error handling
       
       Phase 5 customization backend is production-ready.
+
+  - agent: "testing"
+    message: |
+      ✅ PHASE-6 BACKEND TESTING COMPLETE - ALL TESTS PASSED
+      
+      Tested both Phase-6 backend additions with comprehensive test suite (11 tests total):
+      
+      **ENDPOINT 1: POST /api/groups/{code}/astral/parse-busy with mode parameter**
+      ✅ Test A: mode="weekly" with "working all week 2pm to 6pm" → 28 slots, all d0-d6, hours 14-17
+      ✅ Test B: mode="weekly" with "weekdays 9 to 5" → weekdays only (d0-d4), hours 9-16
+      ✅ Test C: mode="date" with "this Saturday 6pm to 9pm" → ISO date keys, hours 18-20
+      ✅ Test D: mode="weekly" with empty text → {slots:[], count:0, mode:"weekly"}
+      ✅ Test E: mode="garbage" (invalid) → defaults to "date" mode (no 500)
+      
+      **ENDPOINT 2: POST /api/groups/{code}/astral/suggest with astral_persona_override**
+      ✅ Test F: Basic suggest without override → 200 OK with cards[]
+      ✅ Test G: override with tone="warm" → 200 OK, persona merge works
+      ✅ Test H: override with default_location="Brooklyn, NY" → location chain wiring works
+      ✅ Test I: override = {} (empty dict) → 200 OK, same as no override
+      ✅ Test J: override = null → 200 OK, same as no override
+      ✅ Test K: override with unknown keys {"foo":"bar"} → 200 OK, unknown keys silently ignored
+      
+      **RESULTS: 11/11 tests passed (100%)**
+      
+      All acceptance criteria met:
+      - parse-busy mode parameter working correctly (date/weekly modes)
+      - Weekly slots use d0-d6 keys (Mon-Sun)
+      - Date slots use YYYY-MM-DD keys
+      - Invalid mode defaults to "date" (no errors)
+      - astral_persona_override shallow-merges onto group persona
+      - Allowed keys: display_name, tone, lowercase, emoji_on, default_location
+      - Empty/null overrides handled gracefully
+      - Unknown keys silently ignored (no 500 errors)
+      - Location chain: request → override → group base
+      
+      No issues found. Both endpoints production-ready.

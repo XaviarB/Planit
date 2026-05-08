@@ -71,9 +71,9 @@ export const updateMemberPrefs = (code, member_id, payload) =>
 export const astralSuggest = (code, payload) =>
   api.post(`/groups/${code}/astral/suggest`, payload).then((r) => r.data);
 
-export const astralParseBusy = (code, text, anchor_iso) =>
+export const astralParseBusy = (code, text, anchor_iso, mode = "date") =>
   api
-    .post(`/groups/${code}/astral/parse-busy`, { text, anchor_iso })
+    .post(`/groups/${code}/astral/parse-busy`, { text, anchor_iso, mode })
     .then((r) => r.data);
 
 export const astralDraftInvite = (code, suggestion, window_blurb) =>

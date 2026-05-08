@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Palette,
   Clock,
-  Sparkles,
   User,
   Save,
   RefreshCw,
@@ -15,7 +14,6 @@ import {
   getLocalMemberId,
   updateBranding,
   updateLocale,
-  updateAstralPersona,
   updateMemberPrefs,
 } from "../lib/api";
 import AstralBot from "../components/AstralBot";
@@ -217,7 +215,7 @@ export default function CustomizePage() {
   const nav = useNavigate();
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("branding"); // branding | schedule | astral | personal
+  const [tab, setTab] = useState("branding"); // branding | schedule | personal
 
   const memberId = getLocalMemberId(code);
 
@@ -225,12 +223,10 @@ export default function CustomizePage() {
      on demand per section. */
   const [branding, setBranding] = useState(null);
   const [locale, setLocale] = useState(null);
-  const [persona, setPersona] = useState(null);
   const [prefs, setPrefs] = useState(null);
 
   const [savingBranding, setSavingBranding] = useState(false);
   const [savingLocale, setSavingLocale] = useState(false);
-  const [savingPersona, setSavingPersona] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
   /* Initial load */
@@ -243,7 +239,6 @@ export default function CustomizePage() {
         setGroup(g);
         setBranding({ ...(g.branding || {}) });
         setLocale({ ...(g.locale || {}) });
-        setPersona({ ...(g.astral_persona || {}) });
         const me = (g.members || []).find((m) => m.id === memberId);
         setPrefs({ ...((me && me.prefs) || {}) });
       } catch (e) {
@@ -282,18 +277,6 @@ export default function CustomizePage() {
       setSavingLocale(false);
     }
   };
-  const onSavePersona = async () => {
-    setSavingPersona(true);
-    try {
-      const r = await updateAstralPersona(code, persona);
-      setPersona(r.astral_persona);
-      toast.success("persona saved");
-    } catch (e) {
-      toast.error("save failed");
-    } finally {
-      setSavingPersona(false);
-    }
-  };
   const onSavePrefs = async () => {
     if (!memberId) {
       toast.error("you need to join the group first");
@@ -323,7 +306,7 @@ export default function CustomizePage() {
     };
   }, [branding]);
 
-  if (loading || !group || !branding || !locale || !persona) {
+  if (loading || !group || !branding || !locale) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div
@@ -374,7 +357,6 @@ export default function CustomizePage() {
             {[
               { value: "branding", label: "Branding", icon: Palette },
               { value: "schedule", label: "Schedule", icon: Clock },
-              { value: "astral", label: "Astral", icon: Sparkles },
               { value: "personal", label: "Personal", icon: User },
             ].map((t) => {
               const Icon = t.icon;
@@ -621,79 +603,6 @@ export default function CustomizePage() {
             </Section>
           )}
 
-          {/* -------- ASTRAL -------- */}
-          {tab === "astral" && (
-            <Section
-              icon={Sparkles}
-              title="Astral persona"
-              subtitle="Tune your concierge bot's voice. Folded into the Astral prompt at runtime."
-              onSave={onSavePersona}
-              saving={savingPersona}
-              testId="astral-section"
-            >
-              <Field
-                label="Display name"
-                hint="What to call the bot in this group. e.g. 'astral', 'nova', 'planbot'."
-              >
-                <input
-                  type="text"
-                  value={persona.display_name}
-                  onChange={(e) =>
-                    setPersona({ ...persona, display_name: e.target.value })
-                  }
-                  className="neo-input w-full"
-                  maxLength={32}
-                  data-testid="astral-display-name"
-                />
-              </Field>
-              <Field label="Tone">
-                <Segmented
-                  value={persona.tone}
-                  onChange={(v) => setPersona({ ...persona, tone: v })}
-                  options={[
-                    { value: "edgy", label: "Edgy" },
-                    { value: "warm", label: "Warm" },
-                    { value: "minimal", label: "Minimal" },
-                    { value: "hype", label: "Hype" },
-                  ]}
-                  testId="astral-tone"
-                />
-              </Field>
-              <ToggleRow
-                label="Lowercase voice"
-                hint="Keep all responses in lowercase (the canonical astral vibe)."
-                value={!!persona.lowercase}
-                onChange={(v) => setPersona({ ...persona, lowercase: v })}
-                testId="astral-lowercase"
-              />
-              <ToggleRow
-                label="Allow emojis"
-                hint="Let the bot sprinkle emojis in suggestions and invites."
-                value={!!persona.emoji_on}
-                onChange={(v) => setPersona({ ...persona, emoji_on: v })}
-                testId="astral-emoji-on"
-              />
-              <Field
-                label="Default location"
-                hint="Used when no per-member override is set. Falls back to the group base."
-              >
-                <input
-                  type="text"
-                  value={persona.default_location || ""}
-                  onChange={(e) =>
-                    setPersona({
-                      ...persona,
-                      default_location: e.target.value,
-                    })
-                  }
-                  className="neo-input w-full"
-                  placeholder="e.g. Brooklyn, NY"
-                  data-testid="astral-default-location"
-                />
-              </Field>
-            </Section>
-          )}
-
           {/* -------- PERSONAL -------- */}
           {tab === "personal" && (
             <Section
@@ -839,16 +748,13 @@ export default function CustomizePage() {
                 className="text-[11px] font-bold uppercase tracking-widest mb-1"
                 style={{ color: branding.accent_hex }}
               >
-                {persona.display_name}'s take
+                astral's take
               </div>
               <div
                 className="text-sm leading-relaxed"
                 style={{ color: "#0f172a" }}
               >
-                {persona.lowercase
-                  ? "the place is buzzy, lights are low, everyone's pretending it's the weekend already."
-                  : "The place is buzzy, lights are low, everyone's pretending it's the weekend already."}
-                {persona.emoji_on ? " ✨" : ""}
+                the place is buzzy, lights are low, everyone's pretending it's the weekend already.
               </div>
               <div className="flex items-center gap-1.5 mt-3">
                 {[1, 2, 3, 4, 5].map((i) => (

@@ -280,6 +280,9 @@ class UpdateGroupReq(BaseModel):
 class AstralParseBusyReq(BaseModel):
     text: str
     anchor_iso: Optional[str] = None  # defaults to today UTC
+    # "date"   → one-off slots like "I'm busy this Tuesday"
+    # "weekly" → recurring slots like "working all week 2-6pm"
+    mode: Optional[str] = "date"
 
 
 class AstralSuggestReq(BaseModel):
@@ -306,6 +309,12 @@ class AstralSuggestReq(BaseModel):
     # When true, do NOT persist this round to the group's astral_history.
     # Default: persist. UI uses skip_history=true if it's just exploring.
     skip_history: bool = False
+    # Phase-6 — per-user persona override. Lets each member tune Astral's voice
+    # in their own Astral Hub settings without touching the group-level
+    # astral_persona. Shape mirrors AstralPersona (display_name, tone,
+    # lowercase, emoji_on, default_location). Anything missing falls back to
+    # the group persona; anything present wins. None / empty dict = ignore.
+    astral_persona_override: Optional[Dict] = None
 
 
 class AstralDraftInviteReq(BaseModel):
@@ -546,11 +555,16 @@ async def rename_member(code: str, member_id: str, req: RenameMemberReq):
 @api_router.post("/groups/{code}/astral/parse-busy")
 async def astral_parse_busy(code: str, req: AstralParseBusyReq):
     """Natural-language → list of busy slots. Member is responsible for merging
-    into their existing slot list (frontend keeps the editor's UX in charge)."""
+    into their existing slot list (frontend keeps the editor's UX in charge).
+
+    `mode` is "date" (one-off slots, default) or "weekly" (recurring slots
+    keyed d0..d6). Used by the in-editor "recurring events" parser.
+    """
     await find_group(code)
     anchor = (req.anchor_iso or datetime.now(timezone.utc).isoformat())[:10]
-    slots = await parse_busy_text(req.text or "", anchor)
-    return {"slots": slots, "count": len(slots)}
+    mode = req.mode if req.mode in ("date", "weekly") else "date"
+    slots = await parse_busy_text(req.text or "", anchor, mode=mode)
+    return {"slots": slots, "count": len(slots), "mode": mode}
 
 
 @api_router.post("/groups/{code}/astral/suggest")
@@ -578,6 +592,20 @@ async def astral_suggest(code: str, req: AstralSuggestReq):
     # the bot's tone, name, lowercase rule and emoji preference all carry
     # through to suggest_hangouts. Falls back to default persona for old groups.
     persona = g.get("astral_persona") or AstralPersona().model_dump()
+    # Phase-6 — per-user persona override (from each member's Astral Hub
+    # settings). Shallow-merged onto the group persona so users only override
+    # the fields they care about. Dict only — anything else is ignored.
+    if isinstance(req.astral_persona_override, dict) and req.astral_persona_override:
+        allowed = {"display_name", "tone", "lowercase", "emoji_on", "default_location"}
+        for k, v in req.astral_persona_override.items():
+            if k not in allowed:
+                continue
+            # Empty strings / None never override (keeps the group default).
+            if v is None:
+                continue
+            if isinstance(v, str) and v.strip() == "" and k != "default_location":
+                continue
+            persona[k] = v
     # If the persona has a default_location and the request didn't override,
     # prefer that over the group base — lets the customise tab steer area.
     if not location:

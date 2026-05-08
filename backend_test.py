@@ -1,470 +1,674 @@
-#!/usr/bin/env python3
 """
-Phase 5 Customization Backend Tests
-Tests the 5 new customization endpoints added in Phase 5.
+Phase-6 Backend Testing Suite
+Tests for:
+1. POST /api/groups/{code}/astral/parse-busy with mode parameter
+2. POST /api/groups/{code}/astral/suggest with astral_persona_override
 """
-
-import requests
+import httpx
+import asyncio
 import json
-import sys
+from datetime import datetime, timezone
 
-# Backend URL from frontend/.env
-BASE_URL = "https://customize-all-run.preview.emergentagent.com/api"
+# Backend URL from environment
+BACKEND_URL = "https://customize-all-run.preview.emergentagent.com/api"
 
-def log(msg):
-    print(f"[TEST] {msg}")
+class Colors:
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    END = '\033[0m'
 
-def test_phase5_customization():
-    """Test all Phase 5 customization endpoints"""
+def log_test(name, passed, details=""):
+    status = f"{Colors.GREEN}✓ PASS{Colors.END}" if passed else f"{Colors.RED}✗ FAIL{Colors.END}"
+    print(f"{status} | {name}")
+    if details:
+        print(f"      {details}")
+
+def log_section(title):
+    print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
+    print(f"{Colors.BLUE}{title}{Colors.END}")
+    print(f"{Colors.BLUE}{'='*80}{Colors.END}")
+
+async def create_test_group():
+    """Create a fresh test group for testing"""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups",
+            json={
+                "group_name": "Phase-6 Test Group",
+                "creator_name": "Test User",
+                "location": "Brooklyn, NY"
+            }
+        )
+        if resp.status_code != 200:
+            raise Exception(f"Failed to create group: {resp.status_code} {resp.text}")
+        data = resp.json()
+        return data["group"]["code"], data["member_id"]
+
+async def add_member_with_slots(code, member_name, slots):
+    """Add a member to the group and set their availability slots"""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Join group
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/members",
+            json={"name": member_name}
+        )
+        if resp.status_code != 200:
+            raise Exception(f"Failed to add member: {resp.status_code}")
+        member_id = resp.json()["member_id"]
+        
+        # Set slots
+        resp = await client.put(
+            f"{BACKEND_URL}/groups/{code}/members/{member_id}/slots",
+            json={"slots": slots}
+        )
+        if resp.status_code != 200:
+            raise Exception(f"Failed to set slots: {resp.status_code}")
+        
+        return member_id
+
+# =============================================================================
+# ENDPOINT 1: POST /api/groups/{code}/astral/parse-busy with mode parameter
+# =============================================================================
+
+async def test_parse_busy_mode_weekly_all_week():
+    """Test A: mode=weekly with 'working all week 2pm to 6pm'"""
+    log_section("TEST A: parse-busy mode=weekly - all week 2pm to 6pm")
     
-    log("=" * 80)
-    log("PHASE 5 CUSTOMIZATION BACKEND TESTS")
-    log("=" * 80)
+    code, _ = await create_test_group()
     
-    # Create a fresh test group
-    log("\n[SETUP] Creating fresh test group...")
-    create_resp = requests.post(
-        f"{BASE_URL}/groups",
-        json={
-            "group_name": "Phase5Test",
-            "creator_name": "Alex",
-            "location": "NYC"
-        },
-        timeout=30
-    )
-    assert create_resp.status_code == 200, f"Failed to create group: {create_resp.status_code}"
-    response_data = create_resp.json()
-    group_data = response_data.get("group", response_data)  # Handle both nested and flat response
-    code = group_data["code"]
-    creator_id = group_data["members"][0]["id"]
-    log(f"✓ Created group {code} with creator {creator_id}")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/parse-busy",
+            json={
+                "text": "working all week 2pm to 6pm",
+                "mode": "weekly"
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Check response shape
+        has_slots = "slots" in data
+        has_count = "count" in data
+        has_mode = "mode" in data
+        log_test("Response has slots, count, mode", has_slots and has_count and has_mode)
+        
+        # Check mode
+        mode_correct = data.get("mode") == "weekly"
+        log_test("mode='weekly'", mode_correct, f"Got: {data.get('mode')}")
+        
+        # Check slot count (expect ~20-28 slots: 7 days × 4 hours = 28)
+        slots = data.get("slots", [])
+        count = len(slots)
+        count_ok = 20 <= count <= 28
+        log_test(f"Slot count in range [20, 28]", count_ok, f"Got: {count} slots")
+        
+        # Check all slots have mode=weekly
+        all_weekly = all(s.get("mode") == "weekly" for s in slots)
+        log_test("All slots have mode='weekly'", all_weekly)
+        
+        # Check all slots have key in {d0..d6}
+        valid_keys = {f"d{i}" for i in range(7)}
+        all_valid_keys = all(s.get("key") in valid_keys for s in slots)
+        log_test("All slots have key in {d0..d6}", all_valid_keys)
+        
+        # Check hours are in [14, 17] (2pm-6pm = hours 14, 15, 16, 17)
+        all_hours_ok = all(14 <= s.get("hour", -1) <= 17 for s in slots)
+        log_test("All slots have hour in [14, 17]", all_hours_ok)
+        
+        # Check all slots have status=busy
+        all_busy = all(s.get("status") == "busy" for s in slots)
+        log_test("All slots have status='busy'", all_busy)
+        
+        # Print sample slots
+        print(f"\n      Sample slots (first 3):")
+        for s in slots[:3]:
+            print(f"        {s}")
+        
+        return all([passed, has_slots, has_count, has_mode, mode_correct, 
+                   count_ok, all_weekly, all_valid_keys, all_hours_ok, all_busy])
+
+async def test_parse_busy_mode_weekly_weekdays():
+    """Test B: mode=weekly with 'weekdays 9 to 5'"""
+    log_section("TEST B: parse-busy mode=weekly - weekdays 9 to 5")
     
-    # ========================================================================
-    # TEST 1: PUT /api/groups/{code}/branding
-    # ========================================================================
-    log("\n" + "=" * 80)
-    log("TEST 1: PUT /api/groups/{code}/branding")
-    log("=" * 80)
+    code, _ = await create_test_group()
     
-    # 1a. Send all fields
-    log("\n[1a] Testing full branding payload...")
-    branding_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/branding",
-        json={
-            "accent_hex": "#ff5500",
-            "gradient_from": "#ffeedd",
-            "gradient_to": "#ccddee",
-            "emoji": "🎨",
-            "theme_variant": "noir",
-            "default_view": "members"
-        },
-        timeout=30
-    )
-    assert branding_resp.status_code == 200, f"Branding update failed: {branding_resp.status_code}"
-    branding_data = branding_resp.json()
-    assert branding_data["ok"] == True
-    assert branding_data["branding"]["accent_hex"] == "#ff5500"
-    assert branding_data["branding"]["gradient_from"] == "#ffeedd"
-    assert branding_data["branding"]["gradient_to"] == "#ccddee"
-    assert branding_data["branding"]["emoji"] == "🎨"
-    assert branding_data["branding"]["theme_variant"] == "noir"
-    assert branding_data["branding"]["default_view"] == "members"
-    log("✓ Full branding payload accepted and returned correctly")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/parse-busy",
+            json={
+                "text": "weekdays 9 to 5",
+                "mode": "weekly"
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        slots = data.get("slots", [])
+        
+        # Check all slots are weekdays only (d0-d4, no d5/d6)
+        weekday_keys = {f"d{i}" for i in range(5)}  # d0-d4
+        all_weekdays = all(s.get("key") in weekday_keys for s in slots)
+        log_test("All slots are weekdays only (d0-d4)", all_weekdays)
+        
+        # Check no weekend slots
+        no_weekend = not any(s.get("key") in {"d5", "d6"} for s in slots)
+        log_test("No weekend slots (d5, d6)", no_weekend)
+        
+        # Check hours are in [9, 16] (9am-5pm = hours 9-16)
+        all_hours_ok = all(9 <= s.get("hour", -1) <= 16 for s in slots)
+        log_test("All slots have hour in [9, 16]", all_hours_ok)
+        
+        # Print sample slots
+        print(f"\n      Sample slots (first 3):")
+        for s in slots[:3]:
+            print(f"        {s}")
+        
+        return all([passed, all_weekdays, no_weekend, all_hours_ok])
+
+async def test_parse_busy_mode_date():
+    """Test C: mode=date with 'I'm busy this Saturday from 6pm to 9pm'"""
+    log_section("TEST C: parse-busy mode=date - this Saturday 6pm to 9pm")
     
-    # 1b. Partial update (only accent_hex)
-    log("\n[1b] Testing partial branding update (only accent_hex)...")
-    partial_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/branding",
-        json={"accent_hex": "#00ff00"},
-        timeout=30
-    )
-    assert partial_resp.status_code == 200
-    partial_data = partial_resp.json()
-    assert partial_data["branding"]["accent_hex"] == "#00ff00"
-    # Other fields should remain unchanged from 1a
-    assert partial_data["branding"]["emoji"] == "🎨"
-    assert partial_data["branding"]["theme_variant"] == "noir"
-    log("✓ Partial update preserved other fields")
+    code, _ = await create_test_group()
     
-    # 1c. Hex without leading # gets normalized
-    log("\n[1c] Testing hex normalization (no leading #)...")
-    hex_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/branding",
-        json={"accent_hex": "aabbcc"},
-        timeout=30
-    )
-    assert hex_resp.status_code == 200
-    hex_data = hex_resp.json()
-    assert hex_data["branding"]["accent_hex"] == "#aabbcc"
-    log("✓ Hex normalized to #aabbcc")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/parse-busy",
+            json={
+                "text": "I'm busy this Saturday from 6pm to 9pm",
+                "mode": "date"
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Check mode
+        mode_correct = data.get("mode") == "date"
+        log_test("mode='date'", mode_correct, f"Got: {data.get('mode')}")
+        
+        slots = data.get("slots", [])
+        
+        # Check all slots have mode=date
+        all_date = all(s.get("mode") == "date" for s in slots)
+        log_test("All slots have mode='date'", all_date)
+        
+        # Check all slots have key like YYYY-MM-DD
+        all_iso_dates = all(
+            len(s.get("key", "")) == 10 and s.get("key", "")[4] == "-" and s.get("key", "")[7] == "-"
+            for s in slots
+        )
+        log_test("All slots have key like YYYY-MM-DD", all_iso_dates)
+        
+        # Check hours are in [18, 20] (6pm-9pm = hours 18, 19, 20)
+        all_hours_ok = all(18 <= s.get("hour", -1) <= 20 for s in slots)
+        log_test("All slots have hour in [18, 20]", all_hours_ok)
+        
+        # Print sample slots
+        print(f"\n      Sample slots:")
+        for s in slots:
+            print(f"        {s}")
+        
+        return all([passed, mode_correct, all_date, all_iso_dates, all_hours_ok])
+
+async def test_parse_busy_mode_weekly_empty():
+    """Test D: mode=weekly with empty text"""
+    log_section("TEST D: parse-busy mode=weekly - empty text")
     
-    # 1d. Bad theme_variant falls back to current value
-    log("\n[1d] Testing invalid theme_variant fallback...")
-    bad_theme_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/branding",
-        json={"theme_variant": "rainbow"},
-        timeout=30
-    )
-    assert bad_theme_resp.status_code == 200
-    bad_theme_data = bad_theme_resp.json()
-    # Should keep "noir" from 1a
-    assert bad_theme_data["branding"]["theme_variant"] == "noir"
-    log("✓ Invalid theme_variant 'rainbow' fell back to 'noir'")
+    code, _ = await create_test_group()
     
-    # 1e. Bad default_view falls back to current value
-    log("\n[1e] Testing invalid default_view fallback...")
-    bad_view_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/branding",
-        json={"default_view": "calendar"},
-        timeout=30
-    )
-    assert bad_view_resp.status_code == 200
-    bad_view_data = bad_view_resp.json()
-    # Should keep "members" from 1a
-    assert bad_view_data["branding"]["default_view"] == "members"
-    log("✓ Invalid default_view 'calendar' fell back to 'members'")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/parse-busy",
+            json={
+                "text": "",
+                "mode": "weekly"
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Check empty response
+        slots = data.get("slots", [])
+        count = data.get("count", -1)
+        mode = data.get("mode", "")
+        
+        empty_slots = len(slots) == 0
+        zero_count = count == 0
+        mode_weekly = mode == "weekly"
+        
+        log_test("slots=[]", empty_slots, f"Got: {len(slots)} slots")
+        log_test("count=0", zero_count, f"Got: {count}")
+        log_test("mode='weekly'", mode_weekly, f"Got: {mode}")
+        
+        return all([passed, empty_slots, zero_count, mode_weekly])
+
+async def test_parse_busy_mode_invalid():
+    """Test E: mode=invalid (should default to 'date')"""
+    log_section("TEST E: parse-busy mode=invalid - should default to date")
     
-    # 1f. 404 for unknown group code
-    log("\n[1f] Testing 404 for unknown group code...")
-    unknown_resp = requests.put(
-        f"{BASE_URL}/groups/XXXXXX/branding",
-        json={"accent_hex": "#ff0000"},
-        timeout=30
-    )
-    assert unknown_resp.status_code == 404
-    log("✓ Unknown group code returned 404")
+    code, _ = await create_test_group()
     
-    # ========================================================================
-    # TEST 2: PUT /api/groups/{code}/locale
-    # ========================================================================
-    log("\n" + "=" * 80)
-    log("TEST 2: PUT /api/groups/{code}/locale")
-    log("=" * 80)
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/parse-busy",
+            json={
+                "text": "busy tomorrow 3pm to 5pm",
+                "mode": "garbage"
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200 (no 500)", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Should default to "date" mode
+        mode_date = data.get("mode") == "date"
+        log_test("Defaults to mode='date'", mode_date, f"Got: {data.get('mode')}")
+        
+        return all([passed, mode_date])
+
+# =============================================================================
+# ENDPOINT 2: POST /api/groups/{code}/astral/suggest with astral_persona_override
+# =============================================================================
+
+async def test_suggest_basic_no_override():
+    """Test F: Basic suggest without override"""
+    log_section("TEST F: suggest - basic call without override")
     
-    # 2a. Full payload
-    log("\n[2a] Testing full locale payload...")
-    locale_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/locale",
-        json={
-            "timezone": "America/New_York",
-            "week_start": "sun",
-            "time_format": "24h",
-            "day_start_hour": 8,
-            "day_end_hour": 22,
-            "slot_minutes": 30
-        },
-        timeout=30
-    )
-    assert locale_resp.status_code == 200
-    locale_data = locale_resp.json()
-    assert locale_data["ok"] == True
-    assert locale_data["locale"]["timezone"] == "America/New_York"
-    assert locale_data["locale"]["week_start"] == "sun"
-    assert locale_data["locale"]["time_format"] == "24h"
-    assert locale_data["locale"]["day_start_hour"] == 8
-    assert locale_data["locale"]["day_end_hour"] == 22
-    assert locale_data["locale"]["slot_minutes"] == 30
-    log("✓ Full locale payload accepted and returned correctly")
+    code, member_id = await create_test_group()
     
-    # 2b. Cross-field guard: end <= start should silently reject both hours
-    log("\n[2b] Testing cross-field guard (end <= start)...")
-    guard_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/locale",
-        json={
-            "day_start_hour": 18,
-            "day_end_hour": 9,
-            "time_format": "12h"
-        },
-        timeout=30
-    )
-    assert guard_resp.status_code == 200
-    guard_data = guard_resp.json()
-    # time_format should be applied
-    assert guard_data["locale"]["time_format"] == "12h"
-    # But hours should remain at previous values (8 and 22 from 2a)
-    assert guard_data["locale"]["day_start_hour"] == 8
-    assert guard_data["locale"]["day_end_hour"] == 22
-    log("✓ Cross-field guard rejected invalid hours, applied time_format")
+    # Add some availability slots so suggest has context
+    slots = [
+        {"mode": "date", "key": "2025-07-12", "hour": 19, "minute": 0, "step": 60, "status": "free"},
+        {"mode": "date", "key": "2025-07-12", "hour": 20, "minute": 0, "step": 60, "status": "free"},
+    ]
+    await add_member_with_slots(code, "Alice", slots)
+    await add_member_with_slots(code, "Bob", slots)
     
-    # 2c. Invalid slot_minutes fallback
-    log("\n[2c] Testing invalid slot_minutes fallback...")
-    slot_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/locale",
-        json={"slot_minutes": 45},
-        timeout=30
-    )
-    assert slot_resp.status_code == 200
-    slot_data = slot_resp.json()
-    # Should keep 30 from 2a
-    assert slot_data["locale"]["slot_minutes"] == 30
-    log("✓ Invalid slot_minutes 45 fell back to 30")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/suggest",
+            json={
+                "window_blurb": "Saturday 7-11pm",
+                "location_override": "Brooklyn, NY"
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Check response shape
+        has_intro = "intro" in data
+        has_cards = "cards" in data
+        has_options = isinstance(data.get("cards"), list)
+        
+        log_test("Response has intro", has_intro)
+        log_test("Response has cards (list)", has_cards and has_options)
+        
+        cards = data.get("cards", [])
+        cards_ok = len(cards) > 0
+        log_test(f"Cards returned", cards_ok, f"Got: {len(cards)} cards")
+        
+        # Print sample
+        if cards:
+            print(f"\n      Sample card:")
+            print(f"        venue: {cards[0].get('venue')}")
+            print(f"        category: {cards[0].get('category')}")
+            print(f"        buzz: {cards[0].get('buzz', {}).get('quote', '')[:60]}...")
+        
+        return all([passed, has_intro, has_cards, has_options, cards_ok])
+
+async def test_suggest_with_tone_override():
+    """Test G: suggest with astral_persona_override tone=warm"""
+    log_section("TEST G: suggest - with astral_persona_override tone=warm")
     
-    # 2d. Invalid week_start fallback
-    log("\n[2d] Testing invalid week_start fallback...")
-    week_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/locale",
-        json={"week_start": "monday"},
-        timeout=30
-    )
-    assert week_resp.status_code == 200
-    week_data = week_resp.json()
-    # Should keep "sun" from 2a
-    assert week_data["locale"]["week_start"] == "sun"
-    log("✓ Invalid week_start 'monday' fell back to 'sun'")
+    code, member_id = await create_test_group()
     
-    # ========================================================================
-    # TEST 3: PUT /api/groups/{code}/astral-persona
-    # ========================================================================
-    log("\n" + "=" * 80)
-    log("TEST 3: PUT /api/groups/{code}/astral-persona")
-    log("=" * 80)
+    # Add some availability
+    slots = [
+        {"mode": "date", "key": "2025-07-12", "hour": 19, "minute": 0, "step": 60, "status": "free"},
+    ]
+    await add_member_with_slots(code, "Charlie", slots)
     
-    # 3a. Full payload
-    log("\n[3a] Testing full astral-persona payload...")
-    persona_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/astral-persona",
-        json={
-            "display_name": "nova",
-            "tone": "warm",
-            "lowercase": False,
-            "emoji_on": False,
-            "default_location": "Brooklyn, NY"
-        },
-        timeout=30
-    )
-    assert persona_resp.status_code == 200
-    persona_data = persona_resp.json()
-    assert persona_data["ok"] == True
-    assert persona_data["astral_persona"]["display_name"] == "nova"
-    assert persona_data["astral_persona"]["tone"] == "warm"
-    assert persona_data["astral_persona"]["lowercase"] == False
-    assert persona_data["astral_persona"]["emoji_on"] == False
-    assert persona_data["astral_persona"]["default_location"] == "Brooklyn, NY"
-    log("✓ Full astral-persona payload accepted and returned correctly")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/suggest",
+            json={
+                "window_blurb": "Friday evening",
+                "location_override": "Manhattan, NY",
+                "astral_persona_override": {
+                    "tone": "warm"
+                }
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Check response shape (should not fail)
+        has_cards = isinstance(data.get("cards"), list)
+        log_test("Response has cards (list)", has_cards)
+        
+        cards_ok = len(data.get("cards", [])) > 0
+        log_test("Cards returned", cards_ok, f"Got: {len(data.get('cards', []))} cards")
+        
+        return all([passed, has_cards, cards_ok])
+
+async def test_suggest_with_location_override():
+    """Test H: suggest with astral_persona_override default_location"""
+    log_section("TEST H: suggest - with astral_persona_override default_location")
     
-    # 3b. Empty display_name preserves previous value
-    log("\n[3b] Testing empty display_name preservation...")
-    empty_name_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/astral-persona",
-        json={"display_name": ""},
-        timeout=30
-    )
-    assert empty_name_resp.status_code == 200
-    empty_name_data = empty_name_resp.json()
-    # Should keep "nova" from 3a
-    assert empty_name_data["astral_persona"]["display_name"] == "nova"
-    log("✓ Empty display_name preserved 'nova'")
+    # Create group WITHOUT location
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups",
+            json={
+                "group_name": "No Location Group",
+                "creator_name": "Test User"
+                # No location field
+            }
+        )
+        data = resp.json()
+        code = data["group"]["code"]
     
-    # 3c. Invalid tone fallback
-    log("\n[3c] Testing invalid tone fallback...")
-    tone_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/astral-persona",
-        json={"tone": "loud"},
-        timeout=30
-    )
-    assert tone_resp.status_code == 200
-    tone_data = tone_resp.json()
-    # Should keep "warm" from 3a
-    assert tone_data["astral_persona"]["tone"] == "warm"
-    log("✓ Invalid tone 'loud' fell back to 'warm'")
+    # Add some availability
+    slots = [
+        {"mode": "date", "key": "2025-07-12", "hour": 19, "minute": 0, "step": 60, "status": "free"},
+    ]
+    await add_member_with_slots(code, "Dave", slots)
     
-    # 3d. default_location="" clears to null
-    log("\n[3d] Testing default_location clear to null...")
-    clear_loc_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/astral-persona",
-        json={"default_location": ""},
-        timeout=30
-    )
-    assert clear_loc_resp.status_code == 200
-    clear_loc_data = clear_loc_resp.json()
-    assert clear_loc_data["astral_persona"]["default_location"] is None
-    log("✓ Empty default_location cleared to null")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/suggest",
+            json={
+                "window_blurb": "Saturday night",
+                "astral_persona_override": {
+                    "default_location": "Brooklyn, NY"
+                }
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Check response works
+        has_cards = isinstance(data.get("cards"), list)
+        log_test("Response has cards (list)", has_cards)
+        
+        # Check location chain wiring (used_location should reflect override)
+        used_location = data.get("used_location", "")
+        location_ok = "Brooklyn" in used_location or used_location == "Brooklyn, NY"
+        log_test("Location chain wiring works", location_ok, f"used_location: {used_location}")
+        
+        return all([passed, has_cards, location_ok])
+
+async def test_suggest_with_empty_override():
+    """Test I: suggest with astral_persona_override = {}"""
+    log_section("TEST I: suggest - with astral_persona_override = {}")
     
-    # 3e. Smoke check: POST /api/groups/{code}/astral/suggest still works
-    log("\n[3e] Smoke check: Astral suggest still works after persona update...")
-    suggest_resp = requests.post(
-        f"{BASE_URL}/groups/{code}/astral/suggest",
-        json={
-            "window_blurb": "Saturday 7-11pm",
-            "location_override": "Brooklyn, NY"
-        },
-        timeout=60  # Gemini calls take 10-25s
-    )
-    assert suggest_resp.status_code == 200
-    suggest_data = suggest_resp.json()
-    assert "intro" in suggest_data
-    assert "cards" in suggest_data
-    assert len(suggest_data["cards"]) <= 3
-    log("✓ Astral suggest returned 200 with cards after persona update")
+    code, member_id = await create_test_group()
     
-    # ========================================================================
-    # TEST 4: PUT /api/groups/{code}/members/{member_id}/prefs
-    # ========================================================================
-    log("\n" + "=" * 80)
-    log("TEST 4: PUT /api/groups/{code}/members/{member_id}/prefs")
-    log("=" * 80)
+    slots = [
+        {"mode": "date", "key": "2025-07-12", "hour": 19, "minute": 0, "step": 60, "status": "free"},
+    ]
+    await add_member_with_slots(code, "Eve", slots)
     
-    # 4a. Full payload on real member
-    log("\n[4a] Testing full member prefs payload...")
-    prefs_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
-        json={
-            "color_hex": "#ff00ff",
-            "fab_side": "left",
-            "theme": "dark",
-            "compact": True,
-            "hidden_panels": ["stats", "hangouts"]
-        },
-        timeout=30
-    )
-    assert prefs_resp.status_code == 200
-    prefs_data = prefs_resp.json()
-    assert prefs_data["ok"] == True
-    assert prefs_data["prefs"]["color_hex"] == "#ff00ff"
-    assert prefs_data["prefs"]["fab_side"] == "left"
-    assert prefs_data["prefs"]["theme"] == "dark"
-    assert prefs_data["prefs"]["compact"] == True
-    assert set(prefs_data["prefs"]["hidden_panels"]) == {"stats", "hangouts"}
-    log("✓ Full member prefs payload accepted and returned correctly")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/suggest",
+            json={
+                "window_blurb": "Sunday brunch",
+                "location_override": "Brooklyn, NY",
+                "astral_persona_override": {}
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Should work same as no override
+        has_cards = isinstance(data.get("cards"), list)
+        log_test("Response has cards (same as no override)", has_cards)
+        
+        return all([passed, has_cards])
+
+async def test_suggest_with_null_override():
+    """Test J: suggest with astral_persona_override = null"""
+    log_section("TEST J: suggest - with astral_persona_override = null")
     
-    # 4b. Unknown member_id returns 404
-    log("\n[4b] Testing 404 for unknown member_id...")
-    unknown_member_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/members/unknown-member-id/prefs",
-        json={"theme": "light"},
-        timeout=30
-    )
-    assert unknown_member_resp.status_code == 404
-    log("✓ Unknown member_id returned 404")
+    code, member_id = await create_test_group()
     
-    # 4c. color_hex="" sets to null
-    log("\n[4c] Testing color_hex clear to null...")
-    clear_color_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
-        json={"color_hex": ""},
-        timeout=30
-    )
-    assert clear_color_resp.status_code == 200
-    clear_color_data = clear_color_resp.json()
-    assert clear_color_data["prefs"]["color_hex"] is None
-    log("✓ Empty color_hex cleared to null")
+    slots = [
+        {"mode": "date", "key": "2025-07-12", "hour": 19, "minute": 0, "step": 60, "status": "free"},
+    ]
+    await add_member_with_slots(code, "Frank", slots)
     
-    # 4d. hidden_panels filters unknown values
-    log("\n[4d] Testing hidden_panels filtering...")
-    filter_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
-        json={"hidden_panels": ["stats", "unknown", "hangouts"]},
-        timeout=30
-    )
-    assert filter_resp.status_code == 200
-    filter_data = filter_resp.json()
-    # Should only keep "stats" and "hangouts"
-    assert set(filter_data["prefs"]["hidden_panels"]) == {"stats", "hangouts"}
-    log("✓ hidden_panels filtered out 'unknown', kept ['stats', 'hangouts']")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/suggest",
+            json={
+                "window_blurb": "Monday evening",
+                "location_override": "Brooklyn, NY",
+                "astral_persona_override": None
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Should work same as no override
+        has_cards = isinstance(data.get("cards"), list)
+        log_test("Response has cards (same as no override)", has_cards)
+        
+        return all([passed, has_cards])
+
+async def test_suggest_with_unknown_key():
+    """Test K: suggest with unknown key in override"""
+    log_section("TEST K: suggest - with unknown key in override")
     
-    # 4e. Invalid fab_side fallback
-    log("\n[4e] Testing invalid fab_side fallback...")
-    fab_resp = requests.put(
-        f"{BASE_URL}/groups/{code}/members/{creator_id}/prefs",
-        json={"fab_side": "middle"},
-        timeout=30
-    )
-    assert fab_resp.status_code == 200
-    fab_data = fab_resp.json()
-    # Should keep "left" from 4a
-    assert fab_data["prefs"]["fab_side"] == "left"
-    log("✓ Invalid fab_side 'middle' fell back to 'left'")
+    code, member_id = await create_test_group()
     
-    # ========================================================================
-    # TEST 5: GET /api/groups/{code} backfill
-    # ========================================================================
-    log("\n" + "=" * 80)
-    log("TEST 5: GET /api/groups/{code} backfill for new fields")
-    log("=" * 80)
+    slots = [
+        {"mode": "date", "key": "2025-07-12", "hour": 19, "minute": 0, "step": 60, "status": "free"},
+    ]
+    await add_member_with_slots(code, "Grace", slots)
     
-    # Create a fresh group to test defaults
-    log("\n[5] Creating fresh group to test default backfill...")
-    fresh_resp = requests.post(
-        f"{BASE_URL}/groups",
-        json={
-            "group_name": "DefaultsTest",
-            "creator_name": "Bob",
-            "location": "SF"
-        },
-        timeout=30
-    )
-    assert fresh_resp.status_code == 200
-    fresh_response_data = fresh_resp.json()
-    fresh_data = fresh_response_data.get("group", fresh_response_data)  # Handle both nested and flat response
-    fresh_code = fresh_data["code"]
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/groups/{code}/astral/suggest",
+            json={
+                "window_blurb": "Tuesday night",
+                "location_override": "Brooklyn, NY",
+                "astral_persona_override": {
+                    "foo": "bar",
+                    "unknown_field": "should be ignored"
+                }
+            }
+        )
+        
+        passed = resp.status_code == 200
+        log_test("Status code 200 (no 500)", passed)
+        
+        if not passed:
+            print(f"Response: {resp.status_code} {resp.text}")
+            return False
+        
+        data = resp.json()
+        
+        # Should work (unknown keys silently ignored)
+        has_cards = isinstance(data.get("cards"), list)
+        log_test("Response has cards (unknown keys ignored)", has_cards)
+        
+        return all([passed, has_cards])
+
+# =============================================================================
+# Main test runner
+# =============================================================================
+
+async def main():
+    print(f"\n{Colors.BLUE}{'='*80}{Colors.END}")
+    print(f"{Colors.BLUE}Phase-6 Backend Testing Suite{Colors.END}")
+    print(f"{Colors.BLUE}Backend URL: {BACKEND_URL}{Colors.END}")
+    print(f"{Colors.BLUE}{'='*80}{Colors.END}")
     
-    # GET the group to verify backfill
-    get_resp = requests.get(f"{BASE_URL}/groups/{fresh_code}", timeout=30)
-    assert get_resp.status_code == 200
-    get_data = get_resp.json()
+    results = {}
     
-    # Verify branding defaults
-    assert "branding" in get_data
-    assert get_data["branding"]["accent_hex"] == "#0f172a"
-    assert get_data["branding"]["emoji"] == "🪐"
-    assert get_data["branding"]["theme_variant"] == "default"
-    assert get_data["branding"]["default_view"] == "dates"
-    log("✓ Branding defaults present and correct")
+    # ENDPOINT 1: parse-busy tests
+    try:
+        results["A_weekly_all_week"] = await test_parse_busy_mode_weekly_all_week()
+    except Exception as e:
+        print(f"{Colors.RED}Test A failed with exception: {e}{Colors.END}")
+        results["A_weekly_all_week"] = False
     
-    # Verify locale defaults
-    assert "locale" in get_data
-    assert get_data["locale"]["week_start"] == "mon"
-    assert get_data["locale"]["time_format"] == "12h"
-    assert get_data["locale"]["day_start_hour"] == 0
-    assert get_data["locale"]["day_end_hour"] == 23
-    assert get_data["locale"]["slot_minutes"] == 60
-    log("✓ Locale defaults present and correct")
+    try:
+        results["B_weekly_weekdays"] = await test_parse_busy_mode_weekly_weekdays()
+    except Exception as e:
+        print(f"{Colors.RED}Test B failed with exception: {e}{Colors.END}")
+        results["B_weekly_weekdays"] = False
     
-    # Verify astral_persona defaults
-    assert "astral_persona" in get_data
-    assert get_data["astral_persona"]["display_name"] == "astral"
-    assert get_data["astral_persona"]["tone"] == "edgy"
-    assert get_data["astral_persona"]["lowercase"] == True
-    assert get_data["astral_persona"]["emoji_on"] == True
-    log("✓ Astral persona defaults present and correct")
+    try:
+        results["C_date_mode"] = await test_parse_busy_mode_date()
+    except Exception as e:
+        print(f"{Colors.RED}Test C failed with exception: {e}{Colors.END}")
+        results["C_date_mode"] = False
     
-    # Verify member prefs defaults
-    assert len(get_data["members"]) > 0
-    member = get_data["members"][0]
-    assert "prefs" in member
-    assert member["prefs"]["fab_side"] == "right"
-    assert member["prefs"]["theme"] == "auto"
-    assert member["prefs"]["compact"] == False
-    assert member["prefs"]["hidden_panels"] == []
-    log("✓ Member prefs defaults present and correct")
+    try:
+        results["D_weekly_empty"] = await test_parse_busy_mode_weekly_empty()
+    except Exception as e:
+        print(f"{Colors.RED}Test D failed with exception: {e}{Colors.END}")
+        results["D_weekly_empty"] = False
     
-    # ========================================================================
-    # ALL TESTS PASSED
-    # ========================================================================
-    log("\n" + "=" * 80)
-    log("✅ ALL PHASE 5 CUSTOMIZATION TESTS PASSED")
-    log("=" * 80)
-    log(f"\nTest groups created: {code}, {fresh_code}")
-    log("All 5 Phase 5 backend tasks verified successfully:")
-    log("  1. PUT /api/groups/{code}/branding - ✅")
-    log("  2. PUT /api/groups/{code}/locale - ✅")
-    log("  3. PUT /api/groups/{code}/astral-persona - ✅")
-    log("  4. PUT /api/groups/{code}/members/{member_id}/prefs - ✅")
-    log("  5. GET /api/groups/{code} backfill - ✅")
+    try:
+        results["E_invalid_mode"] = await test_parse_busy_mode_invalid()
+    except Exception as e:
+        print(f"{Colors.RED}Test E failed with exception: {e}{Colors.END}")
+        results["E_invalid_mode"] = False
     
-    return True
+    # ENDPOINT 2: suggest with persona override tests
+    try:
+        results["F_suggest_basic"] = await test_suggest_basic_no_override()
+    except Exception as e:
+        print(f"{Colors.RED}Test F failed with exception: {e}{Colors.END}")
+        results["F_suggest_basic"] = False
+    
+    try:
+        results["G_suggest_tone"] = await test_suggest_with_tone_override()
+    except Exception as e:
+        print(f"{Colors.RED}Test G failed with exception: {e}{Colors.END}")
+        results["G_suggest_tone"] = False
+    
+    try:
+        results["H_suggest_location"] = await test_suggest_with_location_override()
+    except Exception as e:
+        print(f"{Colors.RED}Test H failed with exception: {e}{Colors.END}")
+        results["H_suggest_location"] = False
+    
+    try:
+        results["I_suggest_empty"] = await test_suggest_with_empty_override()
+    except Exception as e:
+        print(f"{Colors.RED}Test I failed with exception: {e}{Colors.END}")
+        results["I_suggest_empty"] = False
+    
+    try:
+        results["J_suggest_null"] = await test_suggest_with_null_override()
+    except Exception as e:
+        print(f"{Colors.RED}Test J failed with exception: {e}{Colors.END}")
+        results["J_suggest_null"] = False
+    
+    try:
+        results["K_suggest_unknown"] = await test_suggest_with_unknown_key()
+    except Exception as e:
+        print(f"{Colors.RED}Test K failed with exception: {e}{Colors.END}")
+        results["K_suggest_unknown"] = False
+    
+    # Summary
+    log_section("TEST SUMMARY")
+    passed = sum(1 for v in results.values() if v)
+    total = len(results)
+    
+    print(f"\nResults: {passed}/{total} tests passed\n")
+    
+    for test_name, result in results.items():
+        status = f"{Colors.GREEN}✓{Colors.END}" if result else f"{Colors.RED}✗{Colors.END}"
+        print(f"  {status} {test_name}")
+    
+    if passed == total:
+        print(f"\n{Colors.GREEN}{'='*80}{Colors.END}")
+        print(f"{Colors.GREEN}ALL TESTS PASSED ✓{Colors.END}")
+        print(f"{Colors.GREEN}{'='*80}{Colors.END}\n")
+    else:
+        print(f"\n{Colors.RED}{'='*80}{Colors.END}")
+        print(f"{Colors.RED}SOME TESTS FAILED ✗{Colors.END}")
+        print(f"{Colors.RED}{'='*80}{Colors.END}\n")
+    
+    return passed == total
 
 if __name__ == "__main__":
-    try:
-        test_phase5_customization()
-        sys.exit(0)
-    except AssertionError as e:
-        log(f"\n❌ TEST FAILED: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-    except Exception as e:
-        log(f"\n❌ UNEXPECTED ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    success = asyncio.run(main())
+    exit(0 if success else 1)

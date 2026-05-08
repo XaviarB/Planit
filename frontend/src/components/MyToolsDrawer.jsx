@@ -35,8 +35,15 @@ export default function MyToolsDrawer({
   group,
   memberId,
   onMemberUpdate, // ({slots?, templates?, calendars?}) => void
+  focusSection,   // "busy" → start on "tell astral" tab (which is also default)
 }) {
   const [tab, setTab] = useState("astral");
+
+  // Honor focusSection when launched from the Astral Hub.
+  useEffect(() => {
+    if (!open) return;
+    if (focusSection === "busy") setTab("astral");
+  }, [open, focusSection]);
 
   if (!open) return null;
 

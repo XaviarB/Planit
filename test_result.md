@@ -337,11 +337,11 @@ backend:
 frontend:
   - task: "Floating Astral + Toolkit launcher (draggable FAB)"
     implemented: true
-    working: "NA"
+    working: false
     file: "frontend/src/components/FloatingLauncher.jsx, frontend/src/pages/Group.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -354,6 +354,42 @@ frontend:
           Clicking either one opens the matching drawer. Both AstralDrawer and
           MyToolsDrawer now live inside the launcher. Position persists in
           localStorage (planit:fab-y, planit:fab-side).
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ CRITICAL BUG - Drag-to-wall snap NOT working:
+          
+          TESTED FEATURES:
+          ✅ Group join flow working correctly
+          ✅ Topbar Row 2 layout verified - 4 buttons in correct order:
+             1. "Sync Our Orbits" (tab-dates) - active by default ✓
+             2. "Edit my availability" (toggle-edit-btn) ✓
+             3. "Members' schedule" (tab-members) ✓
+             4. "Suggest a time" (suggest-meeting-btn) ✓
+          ✅ Astral Hub opens and closes correctly
+          ✅ Hub contains all required components:
+             - Header with "astral" text and close button (hub-close) ✓
+             - Input field (hub-window-input) ✓
+             - Ask button (hub-ask-btn) ✓
+             - 4 tiles: remix, busy, history, tools ✓
+          ✅ Mobile layout verified (2x2 grid with shortened labels: "Orbits", "Edit", "Members")
+          
+          ❌ CRITICAL BUG - Drag-to-anywhere with edge snap BROKEN:
+          - Orb is draggable (moves with mouse) ✓
+          - Orb follows pointer during drag ✓
+          - BUT: After mouse release, orb does NOT snap to nearest wall ❌
+          - Tested 3 drag scenarios:
+            1. Drag to middle (960, 400) → stayed at (960, 400), did NOT snap to top wall
+            2. Drag to (200, 100) → stayed at (200, 100), did NOT snap to top wall
+            3. Drag to (200, 700) → stayed at (200, 700), did NOT snap to left wall
+          - Expected: Orb should snap to wall with distance < 100px from edge
+          - Actual: Orb stays exactly where dragged (distance 400px, 100px, 200px from walls)
+          - Root cause: The snap animation logic in FloatingLauncher.jsx line 80-100 is not
+            executing after mouse up. The window-level `up` handler may not be triggering
+            the snapToNearestWall() call, or freePosRef.current is not being set properly.
+          
+          IMPACT: High - This is a core feature of the new Astral Hub. Users cannot reposition
+          the FAB properly as it stays in the middle of the screen instead of snapping to edges.
   - task: "Recurring schedule — weekday-mode grid"
     implemented: true
     working: "NA"
@@ -547,10 +583,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Floating Astral + Toolkit launcher (FAB)"
     - "Recurring schedule UI — weekday columns instead of dates"
     - "Astral history persistence (frontend integration if any)"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Floating Astral + Toolkit launcher (FAB) - drag snap broken"
   test_all: false
   test_priority: "high_first"
 
@@ -687,3 +723,53 @@ agent_communication:
       3. Theme toggle test selector issues (component exists and works)
       
       No critical issues. All core functionality verified and working as specified.
+
+  - agent: "testing"
+    message: |
+      ❌ ASTRAL HUB TESTING COMPLETE - CRITICAL BUG FOUND
+      
+      Tested the new Astral Hub feature on Group page /g/XKHAPD as requested.
+      
+      **WORKING FEATURES:**
+      ✅ Group join flow (modal, name input, join button)
+      ✅ Topbar Row 2 layout - 4 buttons in exact order:
+         1. "Sync Our Orbits" (tab-dates) - active by default with dark background
+         2. "Edit my availability" (toggle-edit-btn)
+         3. "Members' schedule" (tab-members)
+         4. "Suggest a time" (suggest-meeting-btn)
+      ✅ Floating launcher orb (data-testid="fab-toggle") at right edge
+      ✅ Astral Hub opens on orb click (data-testid="astral-hub")
+      ✅ Hub contains all required components:
+         - Header with "astral" text
+         - Close button (hub-close) - closes hub correctly
+         - Input field (hub-window-input)
+         - Ask button (hub-ask-btn)
+         - 4 tiles: remix, busy, history, tools
+      ✅ Mobile layout (390x844) - buttons in 2x2 grid with shortened labels
+      
+      **CRITICAL BUG - DRAG SNAP NOT WORKING:**
+      ❌ Drag-to-anywhere with edge snap is BROKEN
+      - Orb IS draggable (follows mouse during drag) ✓
+      - BUT: After mouse release, orb does NOT snap to nearest wall ❌
+      - Tested 3 scenarios:
+        1. Drag to (960, 400) → stayed at (960, 400), should snap to top wall
+        2. Drag to (200, 100) → stayed at (200, 100), should snap to top wall
+        3. Drag to (200, 700) → stayed at (200, 700), should snap to left wall
+      - Expected: Orb snaps to wall (distance < 100px from edge)
+      - Actual: Orb stays exactly where dragged (distances: 400px, 100px, 200px)
+      
+      **ROOT CAUSE:**
+      The snap animation logic in FloatingLauncher.jsx (lines 80-100) is not executing
+      after mouse up. The window-level `up` handler may not be triggering the
+      snapToNearestWall() call, or freePosRef.current is not being updated properly.
+      
+      **IMPACT:**
+      High priority - Users cannot reposition the FAB properly. It stays in the middle
+      of the screen blocking content instead of snapping to edges as designed.
+      
+      Screenshots saved:
+      - topbar-row2-layout.png (desktop layout)
+      - astral-hub-open.png (hub with all components)
+      - orb-wall-position.png (shows orb stuck in middle, not at wall)
+      - mobile-layout.png (2x2 grid layout)
+      - drag-test-result.png (detailed drag test showing snap failure)

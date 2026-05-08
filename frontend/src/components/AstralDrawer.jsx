@@ -67,6 +67,8 @@ export default function AstralDrawer({
   onGroupUpdate,
   memberId,
   suggestedWindow,
+  autoSubmit,
+  focusSection,
 }) {
   const [windowBlurb, setWindowBlurb] = useState(suggestedWindow || "");
   const [locationOverride, setLocationOverride] = useState("");
@@ -138,6 +140,8 @@ export default function AstralDrawer({
       setRemixHint(group?.remix_defaults?.hint || "");
       setRemixPresets(group?.remix_defaults?.presets || []);
       setHistoryOpen(false);
+      // If launched from the Astral Hub asking for "history", expand it.
+      if (focusSection === "history") setHistoryOpen(true);
       // Clear any stale typed window first; if a context-provided suggestedWindow
       // exists (e.g. user clicked a heatmap cell that pre-selected a slot),
       // seed it so the user doesn't have to retype.
@@ -166,6 +170,17 @@ export default function AstralDrawer({
     }
     lastOpenRef.current = open;
   }, [open, suggestedWindow, group?.code, group?.remix_defaults]);
+
+  // Auto-submit the ask if the Hub launched us in "suggest" intent.
+  // We defer one tick so windowBlurb state has settled.
+  useEffect(() => {
+    if (!open || !autoSubmit || !suggestedWindow) return;
+    const t = setTimeout(() => {
+      onAsk();
+    }, 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoSubmit, suggestedWindow]);
 
   if (!open) return null;
 

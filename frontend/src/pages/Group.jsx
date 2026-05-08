@@ -315,7 +315,8 @@ export default function GroupPage() {
         </div>
 
         {/* Row 2 — view-tabs + action buttons, evenly spread.
-            Order: Sync Our Orbits → Members' schedule → Edit my availability → Suggest a time. */}
+            Order: Sync Our Orbits → Edit my availability → Members' schedule → Suggest a time.
+            Compact on mobile (2x2 grid) and stretched on desktop (single row, flex-1). */}
         <div
           className="mt-4 grid grid-cols-2 sm:flex sm:items-stretch gap-2 sm:gap-3"
           data-testid="action-row"
@@ -323,33 +324,31 @@ export default function GroupPage() {
           <button
             onClick={() => { setTab("dates"); setEditMode(false); }}
             data-testid="tab-dates"
-            className={`neo-btn flex-1 justify-center text-base font-heading font-extrabold ${
+            className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
               tab === "dates" && !editMode ? "" : "ghost"
             }`}
-            style={{ padding: "14px 22px" }}
           >
             <span className="sm:hidden">Orbits</span>
             <span className="hidden sm:inline">Sync Our Orbits</span>
           </button>
           <button
-            onClick={() => { setTab("members"); setEditMode(false); }}
-            data-testid="tab-members"
-            className={`neo-btn flex-1 justify-center text-base font-heading font-extrabold ${
-              tab === "members" ? "" : "ghost"
-            }`}
-            style={{ padding: "14px 22px" }}
-          >
-            <span className="sm:hidden">Members</span>
-            <span className="hidden sm:inline">Members' schedule</span>
-          </button>
-          <button
-            className={`neo-btn flex-1 justify-center text-base ${editMode ? "" : "ghost"}`}
-            style={{ padding: "14px 22px" }}
+            className={`neo-btn flex-1 justify-center px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${editMode ? "" : "ghost"}`}
             onClick={onDoneEditing}
             disabled={savingExit}
             data-testid="toggle-edit-btn"
           >
-            {editMode ? (savingExit ? "Saving..." : "Done editing") : "Edit my availability"}
+            <span className="sm:hidden">{editMode ? (savingExit ? "Saving..." : "Done") : "Edit"}</span>
+            <span className="hidden sm:inline">{editMode ? (savingExit ? "Saving..." : "Done editing") : "Edit my availability"}</span>
+          </button>
+          <button
+            onClick={() => { setTab("members"); setEditMode(false); }}
+            data-testid="tab-members"
+            className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
+              tab === "members" ? "" : "ghost"
+            }`}
+          >
+            <span className="sm:hidden">Members</span>
+            <span className="hidden sm:inline">Members' schedule</span>
           </button>
           <SuggestMeeting
             members={visibleMembers}
@@ -361,7 +360,7 @@ export default function GroupPage() {
             groupName={group.name}
             groupCode={group.code}
             wrapperClassName="relative flex-1"
-            triggerClassName="neo-btn pastel w-full justify-center flex items-center gap-2 text-base font-heading font-extrabold"
+            triggerClassName="neo-btn pastel w-full justify-center flex items-center gap-1.5 sm:gap-2 px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base font-heading font-extrabold"
           />
         </div>
       </header>

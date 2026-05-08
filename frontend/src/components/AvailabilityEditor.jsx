@@ -370,13 +370,37 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
         </button>
       </div>
 
-      {/* Secondary toolbar row — Recurring busy lives on its own row, right-aligned
-          so it sits directly beneath the Customize labels button above. */}
-      <div className="flex items-center justify-end mb-4">
+      {/* Secondary toolbar row — "Why are you busy?" label + reason chips on the
+          left, "Recurring busy" toggle on the right. Both share the same line. */}
+      <div className="flex items-start gap-3 mb-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="label-caps mb-2">Why are you busy?</div>
+          <div className="flex flex-wrap gap-2" data-testid="reason-picker">
+            <ReasonChip
+              selected={activeReason === null}
+              onClick={() => setActiveReason(null)}
+              color="#ffffff"
+              label="No reason"
+              border
+              testId="reason-chip-none"
+            />
+            {reasons.map((r) => (
+              <ReasonChip
+                key={r.id}
+                selected={activeReason === r.id}
+                onClick={() => setActiveReason(r.id)}
+                color={r.color}
+                label={r.label}
+                testId={`reason-chip-${r.id}`}
+              />
+            ))}
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={() => setRecurringPanelOpen((v) => !v)}
-          className="neo-btn ghost text-sm flex items-center gap-1.5"
+          className="neo-btn ghost text-sm flex items-center gap-1.5 shrink-0 mt-[22px]"
           data-testid="recurring-busy-toggle-btn"
         >
           <Repeat className="w-3.5 h-3.5" />
@@ -389,30 +413,9 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
         </button>
       </div>
 
-      {/* Reason selector */}
+      {/* Reason helper text + customize labels panel */}
       <div className="mb-4">
-        <div className="label-caps mb-2">Why are you busy?</div>
-        <div className="flex flex-wrap gap-2" data-testid="reason-picker">
-          <ReasonChip
-            selected={activeReason === null}
-            onClick={() => setActiveReason(null)}
-            color="#ffffff"
-            label="No reason"
-            border
-            testId="reason-chip-none"
-          />
-          {reasons.map((r) => (
-            <ReasonChip
-              key={r.id}
-              selected={activeReason === r.id}
-              onClick={() => setActiveReason(r.id)}
-              color={r.color}
-              label={r.label}
-              testId={`reason-chip-${r.id}`}
-            />
-          ))}
-        </div>
-        <div className="mt-2 text-xs text-slate-600">
+        <div className="text-xs text-slate-600">
           Tap & drag cells to mark busy with this reason. Tap again to mark free. Hit <b>Done editing</b> when finished — it saves automatically.
         </div>
 

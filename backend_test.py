@@ -9,7 +9,7 @@ import json
 import sys
 
 # Backend URL from frontend/.env
-BASE_URL = "https://flex-app-builder.preview.emergentagent.com/api"
+BASE_URL = "https://customize-all-run.preview.emergentagent.com/api"
 
 def log(msg):
     print(f"[TEST] {msg}")

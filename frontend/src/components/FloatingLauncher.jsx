@@ -1,32 +1,42 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
 import AstralHub from "./AstralHub";
+import AstralBot from "./AstralBot";
 
 const POS_KEY = "planit:fab-pos-v2"; // JSON: {side, offset}
+const HINT_KEY = "planit:fab-hint-seen-v1"; // "1" once dismissed
 const LEGACY_Y_KEY = "planit:fab-y";
 const LEGACY_SIDE_KEY = "planit:fab-side";
 
 // Floating, draggable launcher — single orb that opens the Astral Hub.
 //
 // Drag model (Pointer Events + setPointerCapture):
-//   - On pointerdown, the orb captures the pointer. From then on, ALL
-//     pointermove/up events fire on the orb element, no matter where the
-//     pointer travels — even outside the orb's bounding box. This avoids
-//     the classic "lost cursor mid-drag" bug AND the cross-element race
-//     conditions that plagued the previous mouse-event implementation.
-//   - The orb follows the pointer freely (top, right, bottom or middle —
-//     anywhere on screen).
-//   - On pointerup, the orb snaps to the closest point on the nearest of
-//     the 4 walls (top / right / bottom / left) with a smooth animation.
+//   - On pointerdown the orb captures the pointer. From then on every
+//     pointermove/up event fires on the orb, regardless of where the
+//     pointer travels.
+//   - Released anywhere → orb snaps to the closest point on the nearest
+//     wall (top / right / bottom / left).
 //
-// Tap model:
-//   - Pointer down + up within 8px of travel = tap → toggle the Astral Hub.
+// First-load hint:
+//   - A small speech bubble pops out from the orb on first visit ("psst!
+//     drag me anywhere ✨ tap for astral · ⌘K"). Dismisses on first
+//     interaction OR after 12s, and persists in localStorage.
+//
+// Keyboard shortcut:
+//   - Cmd/Ctrl + K   → toggle the Astral Hub from anywhere on the page
+//   - "/"            → open the hub (same behaviour as Slack/Discord/etc.),
+//                      ignored while typing in inputs/textareas
+//   - Esc            → close (handled inside the Hub)
 export default function FloatingLauncher({ group, memberId, onGroupRefresh, code }) {
   const [hubOpen, setHubOpen] = useState(false);
   const [pos, setPos] = useState(() => loadInitialPos());
-  const [freePos, setFreePos] = useState(null); // {x, y} during drag
+  const [freePos, setFreePos] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [hintVisible, setHintVisible] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(HINT_KEY) !== "1";
+  });
 
   const drag = useRef({ active: false, moved: false, startX: 0, startY: 0, pointerId: null });
 
@@ -42,14 +52,46 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // ── Pointer handlers (fire on the orb because of setPointerCapture) ──
+  // ── First-load hint auto-dismiss after 12s ──
+  useEffect(() => {
+    if (!hintVisible) return;
+    const t = setTimeout(() => dismissHint(), 12_000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintVisible]);
+
+  // ── Global keyboard shortcuts (Cmd/Ctrl+K and "/") ──
+  useEffect(() => {
+    const onKey = (e) => {
+      // Cmd/Ctrl+K → toggle hub from anywhere.
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setHubOpen((v) => !v);
+        dismissHint();
+        return;
+      }
+      // "/" → open hub, but only when the user is NOT typing in an input.
+      if (e.key === "/" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setHubOpen(true);
+        dismissHint();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const dismissHint = () => {
+    setHintVisible(false);
+    try { localStorage.setItem(HINT_KEY, "1"); } catch {}
+  };
+
+  // ── Pointer handlers ──
   const onPointerDown = (e) => {
-    // Only react to primary pointer (left mouse / first touch).
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch { /* some pointers can't be captured (e.g. mouse wheel) */ }
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     drag.current = {
       active: true,
       moved: false,
@@ -68,6 +110,7 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
       drag.current.moved = true;
       setDragging(true);
       setHubOpen(false);
+      dismissHint();
     }
     if (drag.current.moved) {
       const winW = window.innerWidth;
@@ -99,20 +142,20 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
       setDragging(false);
       setFreePos(null);
     } else {
-      // Tap.
+      // Tap → toggle the hub.
       setHubOpen((v) => !v);
+      dismissHint();
     }
   };
 
   const onPointerCancel = (e) => {
-    // Reset cleanly — no snap, no toggle.
     drag.current = { active: false, moved: false, startX: 0, startY: 0, pointerId: null };
     setDragging(false);
     setFreePos(null);
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
   };
 
-  // Compute style.
+  // ── Compute orb style ──
   const orbStyle = (() => {
     const ORB_HALF = 28;
     if (freePos) {
@@ -143,6 +186,18 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
     return { right: PAD, top };
   })();
 
+  // Speech bubble placement — point AWAY from the wall the orb is docked
+  // to, so the tail comes from the orb side.
+  const bubblePlacement = (() => {
+    if (freePos) return { className: "fab-speech--right", style: { left: 64, top: 4 } };
+    if (pos.side === "right") return { className: "fab-speech--left",   style: { right: 64, top: "50%", transform: "translateY(-50%)", maxWidth: 220 } };
+    if (pos.side === "left")  return { className: "fab-speech--right",  style: { left:  64, top: "50%", transform: "translateY(-50%)", maxWidth: 220 } };
+    if (pos.side === "top")   return { className: "fab-speech--top",    style: { top:   64, left: "50%", transform: "translateX(-50%)", maxWidth: 240 } };
+    return { className: "fab-speech--bottom", style: { bottom: 64, left: "50%", transform: "translateX(-50%)", maxWidth: 240 } };
+  })();
+
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
   return (
     <>
       <div
@@ -154,13 +209,47 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
             : dragging
             ? "none"
             : "left 180ms ease, right 180ms ease, top 180ms ease, bottom 180ms ease",
-          // Defensive: ensure the orb sits above any rogue overlay/modal
-          // backdrops that may share its z-index. 60 is already high but
-          // some host layouts use 50–70 inconsistently.
           pointerEvents: "auto",
         }}
         data-testid="floating-launcher"
       >
+        {/* First-load drag-me speech bubble. */}
+        {hintVisible && !hubOpen && !dragging && (
+          <div
+            className={`fab-speech ${bubblePlacement.className}`}
+            style={bubblePlacement.style}
+            data-testid="fab-hint"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <div
+                  className="font-heading font-black text-[11px] uppercase tracking-wider mb-0.5"
+                  style={{ color: "var(--ink-mute)" }}
+                >
+                  hi, i'm astral ✨
+                </div>
+                <div className="text-[12px] leading-snug">
+                  drag me to any edge of your screen.{" "}
+                  <span className="font-bold">tap me</span> or hit{" "}
+                  <span className="hub-kbd">{isMac ? "⌘" : "Ctrl"}K</span> to plot your next hangout.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissHint}
+                aria-label="Dismiss tip"
+                className="fab-speech-close shrink-0"
+                data-testid="fab-hint-dismiss"
+                title="Got it"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         <button
           type="button"
           onPointerDown={onPointerDown}
@@ -179,12 +268,16 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
           data-testid="fab-toggle"
           aria-label={hubOpen ? "Close Astral hub" : "Open Astral hub"}
           aria-expanded={hubOpen}
-          title="Drag to move · tap for Astral"
+          title="Drag to move · Tap or ⌘K for Astral"
         >
           {hubOpen ? (
             <X className="w-5 h-5" strokeWidth={2.5} style={{ pointerEvents: "none" }} />
           ) : (
-            <Sparkles className="w-5 h-5 astral-spark" strokeWidth={2.5} style={{ pointerEvents: "none" }} />
+            <AstralBot
+              size={36}
+              waving={!dragging}
+              style={{ pointerEvents: "none" }}
+            />
           )}
         </button>
       </div>
@@ -202,14 +295,20 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
   );
 }
 
-// ─── helpers ──────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// Given an absolute (x, y) on the viewport, return { side, offset } for the
-// closest point on the nearest of the 4 walls.
+function isTypingTarget(el) {
+  if (!el) return false;
+  const tag = (el.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
+
 function snapToNearestWall(x, y) {
   if (typeof window === "undefined") return { side: "right", offset: 0.5 };
   const winW = window.innerWidth;

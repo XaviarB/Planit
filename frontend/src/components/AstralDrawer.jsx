@@ -35,6 +35,19 @@ const REMIX_CHIPS = [
   { key: "indoorsy",               label: "indoorsy" },
 ];
 
+// Tone → color mapping used by both the buzz pill on each card and the
+// mood-filter chips in the history panel. Keep in sync with TONE_COLOR
+// inside SuggestionCard (we duplicate here to avoid a render-time import
+// cycle on the drawer's hot path).
+const TONE_COLOR_MAP = {
+  love: "#22c55e",
+  hype: "#f59e0b",
+  "cult-favorite": "#a855f7",
+  underrated: "#06b6d4",
+  controversial: "#ef4444",
+  mixed: "#94a3b8",
+};
+
 /**
  * AstralDrawer
  * ------------
@@ -94,6 +107,9 @@ export default function AstralDrawer({
   // sessions) and to render the "Recent rounds" panel.
   const [history, setHistory] = useState([]); // newest-first
   const [historyOpen, setHistoryOpen] = useState(false);
+  // History sort & filter (UI-only — server returns newest-first).
+  const [historySort, setHistorySort] = useState("newest"); // "newest" | "oldest" | "venues"
+  const [historyMood, setHistoryMood] = useState("all"); // "all" | tone key
   const [savingDefaults, setSavingDefaults] = useState(false);
 
   // Lock-in flow — Phase 4 commitment ladder.
@@ -128,6 +144,37 @@ export default function AstralDrawer({
     );
     return () => clearInterval(t);
   }, [loading, LOADING_LINES.length]);
+
+  // ── Derived: moods present in history (for the filter pill row) ──
+  const moodsInHistory = useMemo(() => {
+    const set = new Set();
+    for (const r of history || []) {
+      for (const c of (r.cards || [])) {
+        const tone = c?.buzz?.tone;
+        if (tone) set.add(tone);
+      }
+    }
+    return Array.from(set);
+  }, [history]);
+
+  // ── Derived: visible history rows (sorted + mood-filtered) ──
+  const visibleHistory = useMemo(() => {
+    let rows = (history || []).slice();
+    if (historyMood !== "all") {
+      rows = rows.filter((r) =>
+        (r.cards || []).some((c) => c?.buzz?.tone === historyMood)
+      );
+    }
+    if (historySort === "oldest") {
+      rows.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+    } else if (historySort === "venues") {
+      rows.sort((a, b) => (b.cards?.length || 0) - (a.cards?.length || 0));
+    } else {
+      // newest (default — server already returns newest-first, but be safe)
+      rows.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+    }
+    return rows;
+  }, [history, historyMood, historySort]);
 
   // Reset transient state when re-opening, then load persisted history
   // and seed the remix chips/hint from the group's saved defaults.
@@ -169,6 +216,7 @@ export default function AstralDrawer({
       }
     }
     lastOpenRef.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, suggestedWindow, group?.code, group?.remix_defaults]);
 
   // Auto-submit the ask if the Hub launched us in "suggest" intent.
@@ -517,18 +565,106 @@ export default function AstralDrawer({
                     Recent rounds
                   </span>
                   <span className="text-[0.6rem] uppercase tracking-wider font-bold opacity-60">
-                    {history.length}
+                    {visibleHistory.length}
+                    {visibleHistory.length !== history.length && (
+                      <span className="opacity-50"> / {history.length}</span>
+                    )}
                   </span>
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 transition-transform ${historyOpen ? "rotate-180" : ""}`}
                 />
               </button>
+
               {historyOpen && (
-                <div className="mt-3 space-y-2">
-                  {history.slice(0, 8).map((r) => {
+                <div className="mt-3 space-y-3">
+                  {/* Sort + Mood-filter controls */}
+                  <div className="flex flex-wrap items-center gap-2 pb-2 border-b-2 border-slate-900/10">
+                    {/* Sort segmented control */}
+                    <div
+                      className="inline-flex border-2 border-slate-900 rounded-full overflow-hidden text-[0.6rem]"
+                      style={{ boxShadow: "1px 1px 0 0 var(--ink)" }}
+                      data-testid="astral-history-sort"
+                    >
+                      {[
+                        { key: "newest", label: "newest" },
+                        { key: "oldest", label: "oldest" },
+                        { key: "venues", label: "by venues" },
+                      ].map((opt, idx) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setHistorySort(opt.key)}
+                          className={`px-2 py-1 font-extrabold uppercase tracking-wider transition ${
+                            historySort === opt.key
+                              ? "bg-slate-900 text-white"
+                              : "bg-white hover:bg-[var(--pastel-mint)]"
+                          } ${idx > 0 ? "border-l-2 border-slate-900" : ""}`}
+                          data-testid={`astral-history-sort-${opt.key}`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Mood filter chips */}
+                    {moodsInHistory.length > 0 && (
+                      <div
+                        className="flex items-center gap-1 flex-wrap"
+                        data-testid="astral-history-mood-filter"
+                      >
+                        <span
+                          className="text-[0.55rem] uppercase tracking-wider font-bold"
+                          style={{ color: "var(--ink-mute)" }}
+                        >
+                          mood
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryMood("all")}
+                          className={`text-[0.6rem] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border-2 border-slate-900 transition ${
+                            historyMood === "all"
+                              ? "bg-slate-900 text-white"
+                              : "bg-white hover:bg-[var(--pastel-mint)]"
+                          }`}
+                          data-testid="astral-history-mood-all"
+                        >
+                          all
+                        </button>
+                        {moodsInHistory.map((tone) => (
+                          <button
+                            key={tone}
+                            type="button"
+                            onClick={() => setHistoryMood(tone)}
+                            className={`text-[0.6rem] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border-2 border-slate-900 transition flex items-center gap-1 ${
+                              historyMood === tone
+                                ? "text-white"
+                                : "bg-white hover:bg-[var(--pastel-mint)]"
+                            }`}
+                            style={{
+                              background: historyMood === tone ? (TONE_COLOR_MAP[tone] || "#0f172a") : undefined,
+                            }}
+                            data-testid={`astral-history-mood-${tone}`}
+                            title={`Show only rounds with ${tone} picks`}
+                          >
+                            <span
+                              className="inline-block w-1.5 h-1.5 rounded-full"
+                              style={{ background: TONE_COLOR_MAP[tone] || "#94a3b8" }}
+                            />
+                            {tone}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Filtered/sorted rows */}
+                  {visibleHistory.slice(0, 12).map((r) => {
                     const firstVenue = (r.cards || [])[0]?.venue || "(no venues)";
                     const dt = (r.created_at || "").slice(0, 10);
+                    const tones = Array.from(
+                      new Set((r.cards || []).map((c) => c?.buzz?.tone).filter(Boolean))
+                    );
                     return (
                       <div
                         key={r.id}
@@ -537,12 +673,13 @@ export default function AstralDrawer({
                       >
                         <button
                           type="button"
-                          className="flex-1 text-left"
+                          className="flex-1 text-left min-w-0"
                           onClick={() => onResumeRound(r)}
                           data-testid={`astral-history-resume-${r.id}`}
+                          title="Restore this round as current result"
                         >
                           <div className="flex items-center gap-2">
-                            <Pin className="w-3 h-3" />
+                            <Pin className="w-3 h-3 shrink-0" />
                             <span className="font-heading font-bold text-xs truncate">
                               {r.window_blurb || "untitled window"}
                             </span>
@@ -552,25 +689,67 @@ export default function AstralDrawer({
                               </span>
                             )}
                           </div>
-                          <div className="text-[0.7rem] opacity-70 truncate flex items-center gap-1">
-                            <ChevronRight className="w-3 h-3" />
-                            {firstVenue}
-                            {(r.cards || []).length > 1 && ` +${r.cards.length - 1} more`}
-                            <span className="opacity-50 ml-1">· {dt}</span>
+                          <div className="text-[0.7rem] opacity-70 truncate flex items-center gap-1 mt-0.5">
+                            <ChevronRight className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{firstVenue}</span>
+                            {(r.cards || []).length > 1 && (
+                              <span className="opacity-70 shrink-0">
+                                +{r.cards.length - 1} more
+                              </span>
+                            )}
+                            <span className="opacity-50 ml-1 shrink-0">· {dt}</span>
                           </div>
+                          {/* Mood dot row */}
+                          {tones.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1">
+                              {tones.slice(0, 4).map((t) => (
+                                <span
+                                  key={t}
+                                  className="inline-flex items-center gap-1 text-[0.55rem] font-bold uppercase tracking-wider opacity-80"
+                                >
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ background: TONE_COLOR_MAP[t] || "#94a3b8" }}
+                                  />
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteRound(r.id)}
-                          className="w-6 h-6 grid place-items-center rounded-md hover:bg-[var(--pastel-peach)] opacity-60 hover:opacity-100"
-                          aria-label="Delete round"
-                          data-testid={`astral-history-delete-${r.id}`}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onResumeRound(r)}
+                            className="text-[0.55rem] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border-2 border-slate-900 bg-[var(--pastel-yellow)] hover:translate-y-[-1px] transition"
+                            data-testid={`astral-history-restore-${r.id}`}
+                            title="Restore"
+                          >
+                            restore
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteRound(r.id)}
+                            className="w-6 h-6 grid place-items-center rounded-md hover:bg-[var(--pastel-peach)] opacity-60 hover:opacity-100 self-end"
+                            aria-label="Delete round"
+                            data-testid={`astral-history-delete-${r.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
+
+                  {visibleHistory.length === 0 && (
+                    <div
+                      className="text-[0.7rem] italic text-center py-3 lowercase"
+                      style={{ color: "var(--ink-mute)" }}
+                    >
+                      no rounds match this filter. try "all".
+                    </div>
+                  )}
+
                   {history.length > 0 && (
                     <button
                       type="button"

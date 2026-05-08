@@ -705,17 +705,168 @@ frontend:
           
           Minor issue (non-blocking):
           - Theme toggle selector issue in test (component exists and is visible, test selector didn't match). Visual inspection from screenshots confirms theme toggle is present and styled correctly.
+  - task: "First-load drag-me speech bubble (fab-hint)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/FloatingLauncher.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Added first-load hint bubble that appears near the FAB orb on first visit. Shows
+          "hi, i'm astral ✨" header and instructions to drag, tap, or use keyboard shortcut
+          (⌘K or CtrlK). Dismisses on first interaction or after 12s. Persists in localStorage
+          (planit:fab-hint-seen-v1). Speech bubble placement adapts to orb position (points
+          away from the wall the orb is docked to).
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 test scenarios passed:
+          1. fab-hint visible after clearing localStorage key ✓
+          2. Hint contains required text: "drag", "tap", and keyboard shortcut (CtrlK) ✓
+          3. Dismiss button [data-testid="fab-hint-dismiss"] found and functional ✓
+          4. Hint disappears after clicking dismiss ✓
+          5. Hint does NOT reappear after page reload (persistence works) ✓
+          Screenshot captured with hint visible. Feature working perfectly as designed.
+  - task: "Robot icon in FAB orb (AstralBot component)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/FloatingLauncher.jsx, frontend/src/components/AstralBot.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Replaced Sparkles icon with custom AstralBot SVG character. Robot has rounded head,
+          antenna with star tip, glowing eyes (radial gradient), smile, side dials/ears, visor,
+          and chest sparkle. Designed to read clearly at 32-48px on pastel gradients. Includes
+          optional waving animation (antenna star bobs). Renders at 36px in FAB orb.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - Robot icon implementation confirmed:
+          1. Robot SVG found with correct viewBox="0 0 32 32" ✓
+          2. SVG has expected elements (circles for eyes/head, rects for body/visor) ✓
+          3. Visual inspection from zoomed screenshot confirms cute robot character visible ✓
+          4. No Sparkles icon found (successfully replaced) ✓
+          Feature working as designed. Robot mascot clearly visible in FAB orb.
+  - task: "Keyboard shortcuts (/ and Cmd+K / Ctrl+K)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/FloatingLauncher.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Added global keyboard shortcuts for Astral Hub. "/" key opens hub (ignored when typing
+          in inputs/textareas). Cmd/Ctrl+K toggles hub open/close from anywhere. Escape closes
+          hub (handled inside AstralHub component). Event listeners attached on mount, cleaned
+          up on unmount. Shortcuts work regardless of where user is on the page.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 keyboard shortcut scenarios passed:
+          1. "/" key opens hub ✓
+          2. Escape closes hub ✓
+          3. Cmd+K opens hub ✓
+          4. Cmd+K again closes hub (toggle works) ✓
+          5. Cmd+K third time opens hub again ✓
+          All shortcuts work correctly from any page state. Screenshot captured with hub open
+          via keyboard shortcut. Feature working perfectly as designed.
+  - task: "Inline ask flow in AstralHub (results in same block, not drawer)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/AstralHub.jsx, frontend/src/components/SuggestionCard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Refactored AstralHub to support 3 modes: menu (default), loading, results. When user
+          types window blurb and clicks ask, hub switches to loading mode with rotating quirky
+          quotes ("astral is plotting…", "scanning the city's pulse…"). After Gemini responds,
+          hub switches to results mode and renders 3 compact SuggestionCards INLINE in the same
+          block (not in a separate drawer). Results view includes "you asked" header with back
+          button, intro text, cards with full action buttons (maps, verify, draft, lock), and
+          bottom bar with "ask again" and "remix in drawer" buttons. Back button returns to menu.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All inline ask flow scenarios passed:
+          1. Typed "saturday 7-11pm" in hub input [data-testid="hub-window-input"] ✓
+          2. Clicked ask button [data-testid="hub-ask-btn"] ✓
+          3. Hub switched to loading mode (data-mode="loading") ✓
+          4. Loading text "astral is plotting…" visible ✓
+          5. Results appeared within 30 seconds ✓
+          6. Hub switched to results mode (data-mode="results") ✓
+          7. "you asked" header found ✓
+          8. 3 suggestion cards rendered INLINE in hub (The Royal Palms Shuffleboard Club, Fette Sau, Our Wicked Lady) ✓
+          9. Each card has action buttons (maps, verify, draft, lock) ✓
+          10. Bottom buttons found: back [data-testid="hub-results-back"], ask again [data-testid="hub-results-ask-again"], remix [data-testid="hub-results-remix"] ✓
+          11. Back button returns to menu mode ✓
+          Gemini API call completed in ~15 seconds. All cards display buzz quotes, ratings, Astral's
+          take, and full action buttons. Feature working perfectly - results are truly inline in the
+          hub block, not in a separate drawer. Screenshot captured with 3 cards visible.
+  - task: "Astral history sort & mood filter in AstralDrawer"
+    implemented: true
+    working: true
+    file: "frontend/src/components/AstralDrawer.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Added sort and mood filter controls to the history panel in AstralDrawer. Sort segmented
+          control [data-testid="astral-history-sort"] with 3 options: newest (default), oldest,
+          by venues. Clicking each option updates active state (dark bg) and re-sorts visible
+          history rows. Mood filter [data-testid="astral-history-mood-filter"] shows chips for
+          each tone present in history (love, hype, cult-favorite, underrated, controversial,
+          mixed) plus "all" chip. Clicking a mood chip filters history to show only rounds with
+          cards matching that tone. Each history row has a "restore" pill button
+          [data-testid="astral-history-restore-{id}"] that loads that round as the current result.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All history sort & filter scenarios passed:
+          1. Clicked history tile [data-testid="hub-tile-history"] from hub ✓
+          2. AstralDrawer opened [data-testid="astral-drawer"] ✓
+          3. History panel found [data-testid="astral-history-panel"] ✓
+          4. Sort control found [data-testid="astral-history-sort"] ✓
+          5. All 3 sort options found: newest, oldest, by venues ✓
+          6. Clicked "oldest" → active state (bg-slate-900) applied ✓
+          7. Clicked "by venues" → active state applied ✓
+          8. Clicked "newest" → active state applied ✓
+          9. Mood filter found [data-testid="astral-history-mood-filter"] ✓
+          10. "all" mood chip found [data-testid="astral-history-mood-all"] ✓
+          11. Clicked "all" → active state (bg-slate-900) applied ✓
+          12. Found 5 mood chips total (including "all") - love, hype, cult-favorite, underrated ✓
+          13. Clicked specific mood chip → active state (white text) applied ✓
+          14. Found 1 restore button [data-testid="astral-history-restore-{id}"] ✓
+          All sort and filter controls working correctly with proper visual feedback. Screenshot
+          captured showing history panel with sort/filter controls. Feature working perfectly.
 
 metadata:
   created_by: "main_agent"
-  version: "1.2"
-  test_sequence: 3
+  version: "1.3"
+  test_sequence: 4
   run_ui: false
 
 test_plan:
   current_focus:
     - "Recurring schedule UI — weekday columns instead of dates"
-    - "Astral history persistence (frontend integration if any)"
+    - "Backend: Astral history persistence, Group remix defaults, Recurrence toggle, OG card endpoints"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -1023,3 +1174,72 @@ agent_communication:
       
       IMPACT: Bug fully resolved. Feature is now working as designed with no known issues.
       The stuck task can be removed from the stuck_tasks list.
+
+  - agent: "testing"
+    message: |
+      ✅ ASTRAL HUB UPGRADES TESTING COMPLETE - ALL 5 FEATURES WORKING PERFECTLY
+      
+      Tested the new Astral Hub upgrades as requested. All features are fully functional with no critical issues.
+      
+      **TEST RESULTS SUMMARY:**
+      
+      ✅ TEST 1 — First-load drag-me speech bubble (5/5 passed)
+         - Hint visible after clearing localStorage ✓
+         - Contains "drag", "tap", and keyboard shortcut text ✓
+         - Dismiss button works ✓
+         - Hint disappears after dismiss ✓
+         - Persistence works (doesn't reappear after reload) ✓
+      
+      ✅ TEST 2 — Robot icon in FAB orb (2/2 passed)
+         - Robot SVG found with correct viewBox ✓
+         - Has expected elements (circles, rects) ✓
+         - Visual inspection confirms cute robot character visible ✓
+      
+      ✅ TEST 3 — Keyboard shortcuts (5/5 passed)
+         - "/" key opens hub ✓
+         - Escape closes hub ✓
+         - Cmd+K opens hub ✓
+         - Cmd+K toggles (close) ✓
+         - Cmd+K toggles (open again) ✓
+      
+      ✅ TEST 4 — Inline ask flow (11/11 passed)
+         - Input and ask button work ✓
+         - Hub switches to loading mode ✓
+         - Loading text visible ✓
+         - Results appear within 30 seconds ✓
+         - Hub switches to results mode ✓
+         - "you asked" header present ✓
+         - 3 suggestion cards rendered INLINE in hub (not drawer) ✓
+         - Cards: The Royal Palms Shuffleboard Club, Fette Sau, Our Wicked Lady ✓
+         - Each card has action buttons (maps, verify, draft, lock) ✓
+         - Bottom buttons present (back, ask again, remix) ✓
+         - Back button returns to menu ✓
+      
+      ✅ TEST 5 — Astral history sort & mood filter (14/14 passed)
+         - History tile opens AstralDrawer ✓
+         - History panel visible ✓
+         - Sort control with 3 options (newest, oldest, by venues) ✓
+         - All sort options have correct active states ✓
+         - Mood filter with "all" chip ✓
+         - Multiple mood chips present (love, hype, cult-favorite, underrated) ✓
+         - Mood chips have correct active states ✓
+         - Restore buttons found on history rows ✓
+      
+      **SCREENSHOTS CAPTURED:**
+      - test1-hint-visible.png (speech bubble with hint text)
+      - test2-robot-icon.png (zoomed view of robot in FAB orb)
+      - test3-keyboard-shortcut.png (hub open via Cmd+K)
+      - test4-inline-results.png (3 cards inline in hub)
+      - test4-detailed-results.png (detailed view with all 3 cards)
+      - test5-history-panel.png (sort & filter controls)
+      
+      **CONSOLE ERRORS:** None (only CDN/RUM errors unrelated to app)
+      
+      **OVERALL:** All 5 Astral Hub upgrade features are working perfectly. No critical issues found.
+      The inline ask flow is particularly impressive - results truly render in the same hub block
+      with full card details and action buttons. Gemini API calls complete in 10-25 seconds.
+      
+      **NEXT STEPS:**
+      - Backend tasks still need testing: Astral history persistence endpoints, Group remix defaults,
+        Recurrence toggle, OG card image endpoints
+      - Recurring schedule UI (weekday columns) needs testing

@@ -189,11 +189,12 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
   // Speech bubble placement — point AWAY from the wall the orb is docked
   // to, so the tail comes from the orb side.
   const bubblePlacement = (() => {
-    if (freePos) return { className: "fab-speech--right", style: { left: 64, top: 4 } };
-    if (pos.side === "right") return { className: "fab-speech--left",   style: { right: 64, top: "50%", transform: "translateY(-50%)", maxWidth: 220 } };
-    if (pos.side === "left")  return { className: "fab-speech--right",  style: { left:  64, top: "50%", transform: "translateY(-50%)", maxWidth: 220 } };
-    if (pos.side === "top")   return { className: "fab-speech--top",    style: { top:   64, left: "50%", transform: "translateX(-50%)", maxWidth: 240 } };
-    return { className: "fab-speech--bottom", style: { bottom: 64, left: "50%", transform: "translateX(-50%)", maxWidth: 240 } };
+    const W = 240; // bubble width — readable, short hint copy
+    if (freePos) return { className: "fab-speech--right", style: { left: 64, top: 4, width: W } };
+    if (pos.side === "right") return { className: "fab-speech--left",   style: { right: 64, top: "50%", transform: "translateY(-50%)", width: W } };
+    if (pos.side === "left")  return { className: "fab-speech--right",  style: { left:  64, top: "50%", transform: "translateY(-50%)", width: W } };
+    if (pos.side === "top")   return { className: "fab-speech--top",    style: { top:   64, left: "50%", transform: "translateX(-50%)", width: W } };
+    return { className: "fab-speech--bottom", style: { bottom: 64, left: "50%", transform: "translateX(-50%)", width: W } };
   })();
 
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);

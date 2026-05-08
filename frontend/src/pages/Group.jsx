@@ -21,10 +21,9 @@ import GroupMenu from "../components/GroupMenu";
 import SuggestMeeting from "../components/SuggestMeeting";
 import MembersSchedule from "../components/MembersSchedule";
 import ShareMenu from "../components/ShareMenu";
-import AstralDrawer from "../components/AstralDrawer";
-import MyToolsDrawer from "../components/MyToolsDrawer";
+import FloatingLauncher from "../components/FloatingLauncher";
 import { HangoutsList } from "../components/Hangouts";
-import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Sparkles, Wand2 } from "lucide-react";
+import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function GroupPage() {
@@ -52,11 +51,6 @@ export default function GroupPage() {
   const [joinOpen, setJoinOpen] = useState(false);
   const editorRef = useRef(null);
   const [savingExit, setSavingExit] = useState(false);
-  // Astral concierge drawer
-  const [astralOpen, setAstralOpen] = useState(false);
-  const [astralWindow, setAstralWindow] = useState("");
-  // Schedule toolkit drawer (NL parser, templates, calendars)
-  const [toolsOpen, setToolsOpen] = useState(false);
 
   // Persist view state changes to localStorage.
   useEffect(() => {
@@ -167,19 +161,36 @@ export default function GroupPage() {
       </div>
     );
 
-  const columns = dateRange(rangeStart, rangeEnd).map((iso) => ({
-    key: iso,
-    label: formatDateShort(iso),
+  // When the group is set to a recurring schedule, we drop calendar dates
+  // entirely and use generic weekday columns (Mon..Sun). Slots are stored
+  // against keys "d0".."d6" with mode "weekly" — handled natively by the
+  // editor + heatmap components and by the schedule.js helpers.
+  const isRecurring = !!group?.recurrence_kind && group.recurrence_kind !== "none";
+  const gridMode = isRecurring ? "weekly" : "date";
+  const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weeklyColumns = WEEKDAY_LABELS.map((label, i) => ({
+    key: `d${i}`,
+    label,
   }));
+
+  const columns = isRecurring
+    ? weeklyColumns
+    : dateRange(rangeStart, rangeEnd).map((iso) => ({
+        key: iso,
+        label: formatDateShort(iso),
+      }));
 
   // Sync Our Orbits (heatmap, non-edit) is locked to a Mon→Sun week, full
   // 24-hour day, hourly precision. The user can scrub through past/future
   // weeks via the week navigator — that's the only thing that changes here.
+  // For recurring groups the heatmap also renders weekday columns directly.
   const week = currentWeekBounds(now, weekOffset);
-  const heatmapColumns = dateRange(week.monday, week.sunday).map((iso) => ({
-    key: iso,
-    label: formatDateShort(iso),
-  }));
+  const heatmapColumns = isRecurring
+    ? weeklyColumns
+    : dateRange(week.monday, week.sunday).map((iso) => ({
+        key: iso,
+        label: formatDateShort(iso),
+      }));
 
   // Multi-select focus: 1 = single-member view, 2+ = compare-mode view.
   const focusedMembers = (group?.members || []).filter((m) =>
@@ -333,16 +344,17 @@ export default function GroupPage() {
           </div>
         </div>
 
-        {/* Row 2 — action buttons. On mobile (<sm) this becomes a 2x2 grid so
-            the buttons stay tappable; on >= sm they stretch single-row. */}
+        {/* Row 2 — action buttons. Now just two: Suggest a time + Edit my
+            availability. Ask Astral and My Toolkit live in the floating
+            launcher so they're reachable from anywhere on the page. */}
         <div
-          className="mt-4 grid grid-cols-2 sm:flex sm:items-stretch gap-2 sm:gap-3"
+          className="mt-4 grid grid-cols-1 sm:flex sm:items-stretch gap-2 sm:gap-3"
           data-testid="action-row"
         >
           <SuggestMeeting
             members={visibleMembers}
             columns={columns}
-            mode="date"
+            mode={gridMode}
             hourFrom={hourFrom}
             hourTo={hourTo}
             minuteStep={60}
@@ -351,35 +363,6 @@ export default function GroupPage() {
             wrapperClassName="relative flex-1"
             triggerClassName="neo-btn pastel w-full justify-center flex items-center gap-2 text-base font-heading font-extrabold"
           />
-          <button
-            type="button"
-            className="astral-trigger flex-1 justify-center text-base"
-            style={{ padding: "14px 22px" }}
-            onClick={() => {
-              setAstralWindow("");
-              setAstralOpen(true);
-            }}
-            data-testid="open-astral-btn"
-            title="Ask Astral — Planit's hangout concierge"
-          >
-            <Sparkles className="astral-spark" strokeWidth={2.5} />
-            Ask Astral
-          </button>
-          <button
-            type="button"
-            className="astral-trigger flex-1 justify-center text-base"
-            onClick={() => setToolsOpen(true)}
-            data-testid="open-tools-btn"
-            title="My toolkit — natural-language busy entry, templates, calendar sync"
-            style={{
-              padding: "14px 22px",
-              background:
-                "linear-gradient(100deg, var(--pastel-mint) 0%, var(--pastel-lavender) 100%)",
-            }}
-          >
-            <Wand2 className="astral-spark" strokeWidth={2.5} />
-            My Toolkit
-          </button>
           <button
             className={`neo-btn flex-1 justify-center text-base ${editMode ? "" : "ghost"}`}
             style={{ padding: "14px 22px" }}
@@ -400,7 +383,7 @@ export default function GroupPage() {
             <QuickStats
               members={visibleMembers}
               columns={heatmapColumns}
-              mode="date"
+              mode={gridMode}
               hourFrom={0}
               hourTo={23}
               minuteStep={60}
@@ -492,8 +475,9 @@ export default function GroupPage() {
         <main className="lg:col-span-9 space-y-6">
           {/* Range controls — minimalist chip presets. Custom inputs only
               appear when the user picks "Custom…" so the default state has
-              just two compact rows of pills. Hidden on Sync Our Orbits. */}
-          {!(tab === "dates" && !editMode) && (
+              just two compact rows of pills. Hidden on Sync Our Orbits.
+              Also hidden in recurring mode — there are no calendar dates to range over. */}
+          {!(tab === "dates" && !editMode) && !isRecurring && (
             <RangeChipBar
               rangeStart={rangeStart}
               rangeEnd={rangeEnd}
@@ -508,14 +492,9 @@ export default function GroupPage() {
             />
           )}
 
-          {/* Sync Our Orbits — week-snapshot navigator with prev/next arrows.
-              Layout (post-cleanup): label on the left, navigator + inline
-              "This week" reset button on the right. The standalone
-              weeks-ahead counter is gone — the date range itself is enough
-              context. The reset button is rendered with visibility:hidden
-              when offset === 0 so the layout doesn't reflow as users
-              click around. */}
-          {tab === "dates" && !editMode && (
+          {/* Sync Our Orbits — week-snapshot navigator (only meaningful for
+              date-bound groups; recurring groups always show a weekday grid). */}
+          {tab === "dates" && !editMode && !isRecurring && (
             <div
               className="neo-card p-4 sm:p-5 flex flex-wrap items-center justify-center sm:justify-between gap-4"
               style={{ background: "var(--pastel-mint)" }}
@@ -628,9 +607,9 @@ export default function GroupPage() {
               me={me}
               reasons={group.reasons}
               columns={columns}
-              mode="date"
-              hourFrom={hourFrom}
-              hourTo={hourTo}
+              mode={gridMode}
+              hourFrom={isRecurring ? 0 : hourFrom}
+              hourTo={isRecurring ? 23 : hourTo}
               minuteStep={minuteStep}
               onMinuteStepChange={setMinuteStep}
               onReasonsChange={(next) =>
@@ -648,7 +627,7 @@ export default function GroupPage() {
               members={visibleMembers}
               reasons={group.reasons}
               columns={heatmapColumns}
-              mode="date"
+              mode={gridMode}
               hourFrom={0}
               hourTo={23}
               minuteStep={60}
@@ -685,40 +664,18 @@ export default function GroupPage() {
         </div>
       )}
 
-      {/* Astral concierge drawer */}
-      <AstralDrawer
-        open={astralOpen}
-        onClose={() => setAstralOpen(false)}
+      {/* Astral + Toolkit live in a draggable floating launcher reachable
+          from any scroll position on the page. */}
+      <FloatingLauncher
         group={group}
         memberId={memberId}
-        suggestedWindow={astralWindow}
-        onGroupUpdate={(g) => {
-          setGroup((prev) => ({ ...prev, ...g }));
-          // If a hangout was just created, refresh the group to pick it up.
-          if (g?._hangoutsBumped) {
-            (async () => {
-              try {
-                const fresh = await getGroup(code);
-                setGroup(fresh);
-              } catch {}
-            })();
+        code={code}
+        onGroupRefresh={(updater) => {
+          if (typeof updater === "function") {
+            setGroup((prev) => updater(prev));
+          } else if (updater) {
+            setGroup(updater);
           }
-        }}
-      />
-
-      {/* Schedule toolkit drawer (Astral NL parser, life templates, calendars) */}
-      <MyToolsDrawer
-        open={toolsOpen}
-        onClose={() => setToolsOpen(false)}
-        group={group}
-        memberId={memberId}
-        onMemberUpdate={async () => {
-          // Pull fresh group state after any merge — slots / templates /
-          // calendars may have changed server-side.
-          try {
-            const fresh = await getGroup(code);
-            setGroup(fresh);
-          } catch {}
         }}
       />
     </div>

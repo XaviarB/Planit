@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend smoke test on /g/N7UVGL covering: FloatingLauncher (FAB) presence + popover + drag + persistence, removal of legacy topbar buttons, action-row simplification, GroupMenu recurrence weekly mode (heatmap weekday columns + AvailabilityEditor weekday columns + recurrence badge + weekly-snapshot-banner suppression), and switching recurrence back to none. Most flows pass cleanly. ONE real bug surfaced: first tap on the FAB toggle does NOT open the popover — a second tap is required (tap1=False, tap2=True; reproducible 100%). Drag-to-reposition + localStorage persistence both work correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "FloatingLauncher",
+        "issue": "First tap/click on [data-testid='fab-toggle'] does not open [data-testid='fab-popover']. Second tap reliably opens it. Reproduced via mouse.down+up at orb center AND via real touch events. Functionality otherwise works (popover content, drawer launch, drag, persistence). Likely cause: race in endDrag/setOpen vs the DragBinder useEffect that re-binds window mousemove/mouseup on every render because onMove/onEnd are inline arrow refs — the first synthesized mouseup may be missed because the binder's cleanup detaches the listener mid-cycle, OR initial dragRef state from useRef gets reset by a stray React effect on first interaction. Action: bind window listeners once (empty deps) using ref-based callbacks, OR call `setOpen` synchronously inside the button's onMouseUp instead of routing through the window-level DragBinder for non-drag taps.",
+        "selector": "[data-testid='fab-toggle']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "FloatingLauncher",
+        "issues": ["FAB orb does not visually animate or give any tap feedback when the user taps it the first time and nothing happens — combined with the missed-tap bug above, users will think it's broken."]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix FAB first-tap miss in /app/frontend/src/components/FloatingLauncher.jsx — refactor DragBinder so window mouseup/mousemove handlers are bound once (use refs for callbacks instead of the [onMove, onEnd] deps array), or move the click→toggle logic to onMouseUp/onClick on the button itself rather than relying on the window-level endDrag for non-drag taps."
+  ],
+  "critical_code_review_comments": [
+    "FloatingLauncher.jsx DragBinder uses [onMove, onEnd] in useEffect deps with inline arrow functions in parent — causes window listeners to detach and re-attach on every render. Use a ref ({ onMoveRef.current = onMove }) and bind once with [].",
+    "FloatingLauncher endDrag toggles popover on every mouseup that wasn't a drag — fragile because it fights with React render cycle. Cleaner: set a `pressedAt` timestamp on mousedown, on mouseup if delta<150ms and !moved → setOpen, all directly on the button's onMouseUp handler. No need to involve the window listener for the tap path.",
+    "Group.jsx is 1056 lines — well over the 700-line guideline. RangeChipBar, MemberRow, LiveStatusBubble, isoToday/isoPlus helpers should be extracted into separate files.",
+    "DragBinder is defined inside FloatingLauncher.jsx but does not need to be; could be a util hook (useDragHandlers) for re-use.",
+    "FloatingLauncher reads import.meta.env at runtime in Group.jsx for og:image — fine for Vite, but if CRA-only the import.meta.env reference will be undefined. Confirmed CRA build still works because of the `||` fallback to process.env, but worth aligning."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (per request)", "frontend": "~92% (12/13 verified flows pass; FAB first-tap miss is the lone failure)"},
+  "test_credentials": "Group code N7UVGL, member id b861aa5c-20be-44a8-b19d-db79b145f3e1 (Alex). Pre-seeded into localStorage planit:member_map / planit:member:N7UVGL.",
+  "seed_data_creation": "No new groups created. Used pre-existing N7UVGL ('Weekend Warriors', Brooklyn, NY).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified: FloatingLauncher renders [data-testid='floating-launcher'] + [data-testid='fab-toggle']; old [data-testid='open-astral-btn'] / [data-testid='open-tools-btn'] removed; action-row contains only SuggestMeeting + toggle-edit-btn; popover (after 2 taps) shows fab-open-astral + fab-open-tools and they correctly open [data-testid='astral-drawer'] / [data-testid='tools-drawer']; drag changes top% offset (0.55 → 0.175 in localStorage planit:fab-y) and survives reload; recurrence weekly path: GroupMenu → menu-recurrence-btn → recurrence-opt-weekly persists, [data-testid='recurrence-badge'] shows, heatmap renders Mon/Tue/Wed/Thu/Fri/Sat/Sun column headers, [data-testid='weekly-snapshot-banner'] is suppressed; AvailabilityEditor renders weekday columns and tab-editing badge; recurrence-opt-none cleanly reverts. AvailabilityEditor cells use data-testid pattern `edit-cell-{key}-{hour}-{minute}` (NOT `cell-d*`) — keep this in mind when writing future cell-toggle tests in weekly mode (key will be 'd0'..'d6').",
+  "rca of the issue": "FAB first-tap miss RCA: FloatingLauncher binds window mousemove/mouseup via DragBinder, whose useEffect dependency array is [onMove, onEnd] — both inline arrow functions in the parent that allocate new identities each render. Sequence on first tap: (1) mousedown on button fires startDrag → dragRef.active=true, no React state change, no rerender; (2) mouseup at window → endDrag fires → setDragging(false) + setOpen(v=>!v) which schedules a rerender; (3) the rerender runs DragBinder useEffect again because onMove/onEnd identities changed → it cleans up old listeners and attaches new ones. The mouseup has already been processed, so the toggle theoretically should commit — but in practice the popover does not appear after first tap (verified via real touch + real mouse). Likely the React 18 batching + the in-flight useEffect cleanup races with the popover render. Reproduction: open /g/N7UVGL, tap fab-toggle once → popover absent. Tap again → popover appears. Mitigation: (a) bind window listeners once with stable refs, OR (b) move the tap-toggle logic out of endDrag onto the button's own onMouseUp/onClick when no drag occurred."
+}

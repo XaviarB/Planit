@@ -335,7 +335,42 @@ backend:
           hangout via PUT, re-fetched .ics and verified confirmed state. All validations passed.
 
 frontend:
-  - task: "Astral concierge drawer + Ask Astral trigger"
+  - task: "Floating Astral + Toolkit launcher (draggable FAB)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/FloatingLauncher.jsx, frontend/src/pages/Group.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Removed "Ask Astral" and "My Toolkit" buttons from the Group topbar Row 2.
+          Replaced with a single draggable circular FAB ([data-testid="fab-toggle"])
+          rendered at the right edge of the viewport (sticky to whichever side the
+          user dragged to). Tap → expands a popover with two pill buttons:
+          [data-testid="fab-open-astral"] and [data-testid="fab-open-tools"].
+          Clicking either one opens the matching drawer. Both AstralDrawer and
+          MyToolsDrawer now live inside the launcher. Position persists in
+          localStorage (planit:fab-y, planit:fab-side).
+  - task: "Recurring schedule — weekday-mode grid"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/Group.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          When group.recurrence_kind !== "none", AvailabilityEditor + HeatmapGrid +
+          QuickStats now receive mode="weekly" and weekday columns ([{key:"d0",label:"Mon"}…{key:"d6",label:"Sun"}])
+          instead of ISO date columns. The week-snapshot navigator and date-range
+          chip bar are hidden in recurring mode (no calendar dates to scrub).
+          Slot persistence to "weekly" + "d{idx}" was already supported in
+          schedule.js; just had to flip the column generators in Group.jsx.
     implemented: true
     working: "NA"
     file: "frontend/src/components/AstralDrawer.jsx, frontend/src/pages/Group.jsx"
@@ -512,10 +547,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Astral history persistence (auto-save on suggest, GET/DELETE endpoints)"
-    - "Group remix defaults (PUT /groups/{code}/remix-defaults)"
-    - "Recurrence toggle (PUT /groups/{code}/recurrence)"
-    - "OG card image endpoint (GET /api/og.png and /api/og/{code}.png)"
+    - "Floating Astral + Toolkit launcher (FAB)"
+    - "Recurring schedule UI — weekday columns instead of dates"
+    - "Astral history persistence (frontend integration if any)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

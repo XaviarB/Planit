@@ -8,7 +8,7 @@ import random
 import string
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -590,7 +590,9 @@ async def astral_history_delete_one(code: str, round_id: str):
 # --------------------------------------------------------------------------- #
 
 class UpdateRemixDefaultsReq(BaseModel):
-    presets: Optional[List[str]] = None
+    # Use List[Any] so non-string entries pass Pydantic and get filtered at
+    # runtime via the isinstance check below (spec: "silently dropped").
+    presets: Optional[List[Any]] = None
     hint: Optional[str] = None
 
 

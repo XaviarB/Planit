@@ -433,8 +433,9 @@ export default function GroupPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-12 gap-6">
-        {/* Sidebar — order: Quick stats → Hangouts → Invite friends → Members → Heatmap legend.
-            Members lifted above the legend per UX request; legend now anchors the bottom of the rail.
+        {/* Sidebar — order: Quick stats → Hangouts → Members → Heatmap legend → Invite friends.
+            Members lifted above the legend, then "Invite friends" moved all the way to the
+            bottom so the rail terminates with the share/code action.
             Each card pops in 80ms after the previous one for a premium entrance. */}
         <aside className="lg:col-span-3 space-y-6">
           {!hiddenPanels.has("stats") && (
@@ -465,32 +466,7 @@ export default function GroupPage() {
             </div>
           )}
 
-          {!hiddenPanels.has("share") && (
-            <div className="neo-card p-4 pop-in relative z-30" style={{ animationDelay: "80ms" }} data-testid="share-card">
-              <div className="label-caps mb-3 flex items-center gap-2">
-                <Share2 className="w-4 h-4" /> Invite friends
-              </div>
-              <div className="flex flex-col gap-2">
-                <ShareMenu
-                  url={`${window.location.origin}/g/${code}`}
-                  groupName={group.name}
-                />
-                <button
-                  className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
-                  onClick={onCopyCode}
-                  data-testid="copy-code-btn"
-                >
-                  <span className="label-caps">Code</span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono tracking-widest font-bold">{group.code}</span>
-                    <Copy className="w-4 h-4" />
-                  </span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="pop-in" style={{ animationDelay: "160ms" }} data-testid="members-card-wrap">
+          <div className="pop-in" style={{ animationDelay: "120ms" }} data-testid="members-card-wrap">
             <div className="neo-card p-5" data-testid="members-card">
               <div className="label-caps mb-3 flex items-center gap-2">
                 <Users className="w-4 h-4" /> Members ({group.members.length})
@@ -532,9 +508,37 @@ export default function GroupPage() {
             </div>
           </div>
 
-          <div className="pop-in" style={{ animationDelay: "240ms" }}>
+          <div className="pop-in" style={{ animationDelay: "180ms" }}>
             <LegendEditor />
           </div>
+
+          {/* Invite friends — anchored at the bottom of the sidebar so the rail
+              terminates with a clear "share this group" action. The relative
+              z-index keeps the ShareMenu popover above heatmap cells. */}
+          {!hiddenPanels.has("share") && (
+            <div className="neo-card p-4 pop-in relative z-30" style={{ animationDelay: "240ms" }} data-testid="share-card">
+              <div className="label-caps mb-3 flex items-center gap-2">
+                <Share2 className="w-4 h-4" /> Invite friends
+              </div>
+              <div className="flex flex-col gap-2">
+                <ShareMenu
+                  url={`${window.location.origin}/g/${code}`}
+                  groupName={group.name}
+                />
+                <button
+                  className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
+                  onClick={onCopyCode}
+                  data-testid="copy-code-btn"
+                >
+                  <span className="label-caps">Code</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono tracking-widest font-bold">{group.code}</span>
+                    <Copy className="w-4 h-4" />
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* Main */}

@@ -250,7 +250,7 @@ export default function GroupPage() {
               <button
                 onClick={() => { setTab("dates"); setEditMode(false); }}
                 data-testid="tab-dates"
-                className={`px-3.5 py-1.5 text-xs font-bold font-heading transition ${
+                className={`px-3 py-1 text-[11px] font-bold font-heading transition leading-tight ${
                   tab === "dates" && !editMode
                     ? "bg-slate-900 text-white"
                     : "bg-white hover:bg-[var(--pastel-mint)]"
@@ -261,7 +261,7 @@ export default function GroupPage() {
               <button
                 onClick={() => { setTab("members"); setEditMode(false); }}
                 data-testid="tab-members"
-                className={`px-3.5 py-1.5 text-xs font-bold font-heading transition border-l-2 border-slate-900 ${
+                className={`px-3 py-1 text-[11px] font-bold font-heading transition leading-tight border-l-2 border-slate-900 ${
                   tab === "members"
                     ? "bg-slate-900 text-white"
                     : "bg-white hover:bg-[var(--pastel-mint)]"

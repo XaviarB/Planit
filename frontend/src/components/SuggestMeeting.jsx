@@ -7,8 +7,35 @@ import { buildTimeSlots, timeLabel, buildSlotMap, buildBusyIndex, memberStatusAt
  * Computes top N time slots where the most members are free, at the active
  * `minuteStep` precision.
  */
-export default function SuggestMeeting({ members, columns, mode, hourFrom, hourTo, minuteStep = 60, groupName, groupCode, triggerClassName, wrapperClassName }) {
-  const [open, setOpen] = useState(false);
+export default function SuggestMeeting({
+  members,
+  columns,
+  mode,
+  hourFrom,
+  hourTo,
+  minuteStep = 60,
+  groupName,
+  groupCode,
+  triggerClassName,
+  wrapperClassName,
+  // Controlled-open mode — when these are passed, the parent owns the
+  // open/close state and we render the popover as a centered modal.
+  // Used by the Astral hub which fires "Suggest a time" from a tile.
+  controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = typeof controlledOpen === "boolean";
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next) => {
+    const value = typeof next === "function" ? next(open) : next;
+    if (isControlled) {
+      onOpenChange && onOpenChange(value);
+    } else {
+      setInternalOpen(value);
+    }
+  };
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [confirmFor, setConfirmFor] = useState(null); // suggestion to confirm
   const [joinLink, setJoinLink] = useState("");
@@ -78,9 +105,10 @@ export default function SuggestMeeting({ members, columns, mode, hourFrom, hourT
     return picks;
   }, [members, columns, mode, hourFrom, hourTo, minuteStep]);
 
-  // Click outside to close
+  // Click outside to close (only in uncontrolled / popover mode — in
+  // controlled mode the modal overlay handles dismissal directly).
   useEffect(() => {
-    if (!open) return;
+    if (!open || isControlled) return;
     const onDoc = (e) => {
       if (popRef.current && !popRef.current.contains(e.target)) setOpen(false);
     };
@@ -144,23 +172,38 @@ export default function SuggestMeeting({ members, columns, mode, hourFrom, hourT
 
   return (
     <div className={wrapperClassName || "relative"} ref={popRef}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={triggerClassName || "neo-btn pastel text-sm flex items-center gap-2"}
-        data-testid="suggest-meeting-btn"
-        title="Suggest a meeting time"
-      >
-        <Sparkles className="w-4 h-4" />
-        Suggest a time
-      </button>
+      {!hideTrigger && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={triggerClassName || "neo-btn pastel text-sm flex items-center gap-2"}
+          data-testid="suggest-meeting-btn"
+          title="Suggest a meeting time"
+        >
+          <Sparkles className="w-4 h-4" />
+          Suggest a time
+        </button>
+      )}
 
       {open && (
-        <div
-          className="absolute right-0 top-full mt-3 w-[340px] z-40 neo-card p-4"
-          style={{ background: "var(--card)" }}
-          data-testid="suggest-meeting-popover"
-          role="dialog"
-        >
+        <>
+          {/* Modal overlay (controlled-open mode only). Tap outside to close. */}
+          {isControlled && (
+            <div
+              className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => setOpen(false)}
+              data-testid="suggest-meeting-overlay"
+            />
+          )}
+          <div
+            className={
+              isControlled
+                ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,360px)] z-[61] neo-card p-4 max-h-[80vh] overflow-y-auto"
+                : "absolute right-0 top-full mt-3 w-[340px] z-40 neo-card p-4"
+            }
+            style={{ background: "var(--card)" }}
+            data-testid="suggest-meeting-popover"
+            role="dialog"
+          >
           <div className="flex items-center justify-between mb-3">
             <div className="label-caps flex items-center gap-2">
               <Sparkles className="w-4 h-4" /> Top free times
@@ -252,6 +295,7 @@ export default function SuggestMeeting({ members, columns, mode, hourFrom, hourT
             </>
           )}
         </div>
+        </>
       )}
 
       {confirmFor && (

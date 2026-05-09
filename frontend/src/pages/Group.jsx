@@ -38,6 +38,7 @@ export default function GroupPage() {
   const persisted = getGroupViewState(code) || {};
   const [tab, setTab] = useState(persisted.tab || "dates"); // dates | members
   const [editMode, setEditMode] = useState(false);
+  const [suggestMeetingOpen, setSuggestMeetingOpen] = useState(false);
   const [rangeStart, setRangeStart] = useState(persisted.rangeStart || isoToday());
   const [rangeEnd, setRangeEnd] = useState(persisted.rangeEnd || isoPlus(isoToday(), 6));
   const [hourFrom, setHourFrom] = useState(typeof persisted.hourFrom === "number" ? persisted.hourFrom : 0);
@@ -382,10 +383,11 @@ export default function GroupPage() {
         </div>
 
         {/* Row 2 — view-tabs + action buttons, evenly spread.
-            Order: Sync Our Orbits → Edit my availability → Members' schedule → Suggest a time.
-            Compact on mobile (2x2 grid) and stretched on desktop (single row, flex-1). */}
+            Order: Sync Our Orbits → Make My Schedule → Members' schedule.
+            "Suggest a time" lives in the Astral hub tile column now, not here.
+            Compact on mobile (3-col grid) and stretched on desktop. */}
         <div
-          className="mt-4 grid grid-cols-2 sm:flex sm:items-stretch gap-2 sm:gap-3"
+          className="mt-4 grid grid-cols-3 sm:flex sm:items-stretch gap-2 sm:gap-3"
           data-testid="action-row"
         >
           <button
@@ -404,8 +406,8 @@ export default function GroupPage() {
             disabled={savingExit}
             data-testid="toggle-edit-btn"
           >
-            <span className="sm:hidden">{editMode ? (savingExit ? "Saving..." : "Done") : "Edit"}</span>
-            <span className="hidden sm:inline">{editMode ? (savingExit ? "Saving..." : "Done editing") : "Edit my availability"}</span>
+            <span className="sm:hidden">{editMode ? (savingExit ? "Saving..." : "Done") : "Schedule"}</span>
+            <span className="hidden sm:inline">{editMode ? (savingExit ? "Saving..." : "Done editing") : "Make My Schedule"}</span>
           </button>
           <button
             onClick={() => { setTab("members"); setEditMode(false); }}
@@ -417,18 +419,6 @@ export default function GroupPage() {
             <span className="sm:hidden">Members</span>
             <span className="hidden sm:inline">Members' schedule</span>
           </button>
-          <SuggestMeeting
-            members={visibleMembers}
-            columns={columns}
-            mode={gridMode}
-            hourFrom={hourFrom}
-            hourTo={hourTo}
-            minuteStep={60}
-            groupName={group.name}
-            groupCode={group.code}
-            wrapperClassName="relative flex-1"
-            triggerClassName="neo-btn pastel w-full justify-center flex items-center gap-1.5 sm:gap-2 px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base font-heading font-extrabold"
-          />
         </div>
       </header>
 
@@ -756,6 +746,24 @@ export default function GroupPage() {
             setGroup(updater);
           }
         }}
+        onSuggestMeeting={() => setSuggestMeetingOpen(true)}
+      />
+
+      {/* Hidden controlled-mode SuggestMeeting — the trigger lives inside
+          the Astral hub tile column now, but the popup itself renders here
+          as a centered modal whenever the hub fires `onSuggestMeeting`. */}
+      <SuggestMeeting
+        members={visibleMembers}
+        columns={columns}
+        mode={gridMode}
+        hourFrom={hourFrom}
+        hourTo={hourTo}
+        minuteStep={60}
+        groupName={group.name}
+        groupCode={group.code}
+        controlledOpen={suggestMeetingOpen}
+        onOpenChange={setSuggestMeetingOpen}
+        hideTrigger
       />
     </div>
   );

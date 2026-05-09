@@ -27,7 +27,7 @@ const LEGACY_SIDE_KEY = "planit:fab-side";
 //   - "/"            → open the hub (same behaviour as Slack/Discord/etc.),
 //                      ignored while typing in inputs/textareas
 //   - Esc            → close (handled inside the Hub)
-export default function FloatingLauncher({ group, memberId, onGroupRefresh, code, defaultSide }) {
+export default function FloatingLauncher({ group, memberId, onGroupRefresh, code, defaultSide, onSuggestMeeting }) {
   const [hubOpen, setHubOpen] = useState(false);
   const [pos, setPos] = useState(() => loadInitialPos(defaultSide));
   const [freePos, setFreePos] = useState(null);
@@ -232,9 +232,11 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
                   Hi, I'm Astral ✨
                 </div>
                 <div className="text-[12px] leading-snug">
-                  Drag me to any edge of your screen.{" "}
-                  <span className="font-bold">Tap me</span> or hit{" "}
-                  <span className="hub-kbd">{isMac ? "⌘" : "Ctrl"}K</span> to plot your next hangout.
+                  Your AI hangout concierge. I match the crew's vibe to <b>real venues</b>, parse messy "i'm busy thursday" texts, and turn group-chat chaos into actual plans.
+                  <span className="block mt-1.5">
+                    Tap me or hit{" "}
+                    <span className="hub-kbd">{isMac ? "⌘" : "Ctrl"}K</span> to start. Drag me to any edge of your screen.
+                  </span>
                 </div>
               </div>
               <button
@@ -291,6 +293,10 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
         memberId={memberId}
         code={code}
         onGroupRefresh={onGroupRefresh}
+        onSuggestMeeting={() => {
+          setHubOpen(false);
+          onSuggestMeeting && onSuggestMeeting();
+        }}
       />
     </>
   );

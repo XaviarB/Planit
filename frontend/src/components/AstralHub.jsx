@@ -41,6 +41,7 @@ export default function AstralHub({
   memberId,
   code,
   onGroupRefresh,
+  onSuggestMeeting,
 }) {
   const [mode, setMode] = useState("menu"); // "menu" | "loading" | "results" | "settings"
   const [windowBlurb, setWindowBlurb] = useState("");
@@ -367,6 +368,7 @@ export default function AstralHub({
                     setToolsOpen(true);
                     onClose && onClose();
                   }}
+                  onSuggestMeeting={onSuggestMeeting}
                 />
               )}
 
@@ -463,7 +465,7 @@ export default function AstralHub({
 
 function MenuBody({
   inputRef, windowBlurb, setWindowBlurb, submitAsk, errMsg,
-  isMac, tile, openDrawer, openTools,
+  isMac, tile, openDrawer, openTools, onSuggestMeeting,
 }) {
   return (
     <div className="px-4 pt-4 pb-4 space-y-4">
@@ -524,6 +526,14 @@ function MenuBody({
       {/* Tile column — 1x4 vertical stack */}
       <div className="flex flex-col gap-2">
         {tile({
+          icon: Sparkles,
+          title: "Suggest a time",
+          hint: "Top free overlaps for the crew, ready to copy & invite",
+          accent: "var(--pastel-mint)",
+          testId: "hub-tile-suggest-time",
+          onClick: () => onSuggestMeeting && onSuggestMeeting(),
+        })}
+        {tile({
           icon: Shuffle,
           title: "Remix",
           hint: "Redirect picks: cheaper, fancier, diff. vibe…",
@@ -543,7 +553,7 @@ function MenuBody({
           icon: History,
           title: "History",
           hint: "Every round Astral picked for the crew",
-          accent: "var(--pastel-mint)",
+          accent: "var(--pastel-sky, #e0f2fe)",
           testId: "hub-tile-history",
           onClick: () => openDrawer("history"),
         })}

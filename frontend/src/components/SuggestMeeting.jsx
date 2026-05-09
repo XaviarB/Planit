@@ -184,7 +184,7 @@ export default function SuggestMeeting({
         </button>
       )}
 
-      {open && (
+      {open && !confirmFor && (
         <>
           {/* Modal overlay (controlled-open mode only). Tap outside to close. */}
           {isControlled && (
@@ -300,7 +300,7 @@ export default function SuggestMeeting({
 
       {confirmFor && (
         <div
-          className="fixed inset-0 bg-slate-900/60 grid place-items-center p-4 z-[60]"
+          className="fixed inset-0 bg-slate-900/60 grid place-items-center p-4 z-[70]"
           data-testid="confirm-meeting-modal"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {

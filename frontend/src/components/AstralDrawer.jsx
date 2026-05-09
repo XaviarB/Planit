@@ -16,6 +16,7 @@ import {
   updateRemixDefaults,
 } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
+import { computeAnchorStyle } from "../lib/anchorStyle";
 import { LockInModal } from "./Hangouts";
 
 // Remix presets — keys MUST match REMIX_PRESETS in backend/astral.py.
@@ -82,6 +83,7 @@ export default function AstralDrawer({
   suggestedWindow,
   autoSubmit,
   focusSection,
+  anchor,
 }) {
   const [windowBlurb, setWindowBlurb] = useState(suggestedWindow || "");
   const [locationOverride, setLocationOverride] = useState("");
@@ -450,20 +452,23 @@ export default function AstralDrawer({
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex"
-      data-testid="astral-drawer"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm pointer-events-none" />
+  // Floating bubble — anchored to the FAB orb instead of the old full-height
+  // side drawer. Caps width to ~440px so it stays a "bubble" rather than a
+  // takeover panel; mobile gracefully recenters as a modal-style card.
+  const bubbleStyle = computeAnchorStyle({ anchor, width: 440, height: 620 });
 
-      {/* Panel */}
+  return (
+    <>
+      {/* Soft tap-out scrim — invisible but catches outside clicks. */}
       <div
-        className="relative ml-auto w-full sm:max-w-[520px] md:max-w-[600px] h-full overflow-y-auto astral-panel"
+        className="fixed inset-0 z-40"
+        data-testid="astral-drawer-scrim"
+        onMouseDown={() => onClose?.()}
+      />
+      <div
+        className="fixed z-50 astral-panel rounded-2xl border-2 border-slate-900 shadow-2xl overflow-y-auto"
+        style={bubbleStyle}
+        data-testid="astral-drawer"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -1004,7 +1009,7 @@ export default function AstralDrawer({
           onGroupUpdate?.({ ...group, _hangoutsBumped: Date.now() });
         }}
       />
-    </div>
+    </>
   );
 }
 

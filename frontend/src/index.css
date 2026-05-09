@@ -16,6 +16,7 @@
     --pastel-yellow: #fef9e7;
     --pastel-lavender: #f4ecf7;
     --pastel-peach: #fde2d3;
+    --pastel-blush: #fce4ec;
     /* Heatmap gradient — green walk (nobody free → everyone free).
        Light mode uses a forest-to-mint gradient: darkest emerald for "nobody
        free" through pale mint for "everyone free". The shades are spaced
@@ -41,6 +42,7 @@ html.dark {
     --pastel-yellow: #3d3520;
     --pastel-lavender: #2e1f3d;
     --pastel-peach: #3a2620;
+    --pastel-blush: #3a2030;
     /* Neon blue gradient (nobody → everyone free) */
     --heat-0: #020617;
     --heat-1: #1e40af;

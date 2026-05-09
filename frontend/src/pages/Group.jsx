@@ -382,44 +382,9 @@ export default function GroupPage() {
           </div>
         </div>
 
-        {/* Row 2 — view-tabs + action buttons, evenly spread.
-            Order: Sync Our Orbits → Make My Schedule → Members' schedule.
-            "Suggest a time" lives in the Astral hub tile column now, not here.
-            Compact on mobile (3-col grid) and stretched on desktop. */}
-        <div
-          className="mt-4 grid grid-cols-3 sm:flex sm:items-stretch gap-2 sm:gap-3"
-          data-testid="action-row"
-        >
-          <button
-            onClick={() => { setTab("dates"); setEditMode(false); }}
-            data-testid="tab-dates"
-            className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
-              tab === "dates" && !editMode ? "" : "ghost"
-            }`}
-          >
-            <span className="sm:hidden">Orbits</span>
-            <span className="hidden sm:inline">Sync Our Orbits</span>
-          </button>
-          <button
-            className={`neo-btn flex-1 justify-center px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${editMode ? "" : "ghost"}`}
-            onClick={onDoneEditing}
-            disabled={savingExit}
-            data-testid="toggle-edit-btn"
-          >
-            <span className="sm:hidden">{editMode ? (savingExit ? "Saving..." : "Done") : "Schedule"}</span>
-            <span className="hidden sm:inline">{editMode ? (savingExit ? "Saving..." : "Done editing") : "Make My Schedule"}</span>
-          </button>
-          <button
-            onClick={() => { setTab("members"); setEditMode(false); }}
-            data-testid="tab-members"
-            className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
-              tab === "members" ? "" : "ghost"
-            }`}
-          >
-            <span className="sm:hidden">Members</span>
-            <span className="hidden sm:inline">Members' schedule</span>
-          </button>
-        </div>
+        {/* Row 2 (action tabs) was moved into the main column so it spans
+            only the heatmap width, not the entire page (Quick Stats stays
+            uncovered on the left). See the action-row block below. */}
       </header>
 
       <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-12 gap-6">
@@ -533,6 +498,43 @@ export default function GroupPage() {
 
         {/* Main */}
         <main className="lg:col-span-9 space-y-6">
+          {/* Action-row tabs sit inside the main column so they only span
+              the heatmap width — Quick Stats on the left stays clean. */}
+          <div
+            className="grid grid-cols-3 sm:flex sm:items-stretch gap-2 sm:gap-3"
+            data-testid="action-row"
+          >
+            <button
+              onClick={() => { setTab("dates"); setEditMode(false); }}
+              data-testid="tab-dates"
+              className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
+                tab === "dates" && !editMode ? "" : "ghost"
+              }`}
+            >
+              <span className="sm:hidden">Orbits</span>
+              <span className="hidden sm:inline">Sync Our Orbits</span>
+            </button>
+            <button
+              className={`neo-btn flex-1 justify-center px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${editMode ? "" : "ghost"}`}
+              onClick={onDoneEditing}
+              disabled={savingExit}
+              data-testid="toggle-edit-btn"
+            >
+              <span className="sm:hidden">{editMode ? (savingExit ? "Saving..." : "Done") : "Schedule"}</span>
+              <span className="hidden sm:inline">{editMode ? (savingExit ? "Saving..." : "Done editing") : "Make My Schedule"}</span>
+            </button>
+            <button
+              onClick={() => { setTab("members"); setEditMode(false); }}
+              data-testid="tab-members"
+              className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
+                tab === "members" ? "" : "ghost"
+              }`}
+            >
+              <span className="sm:hidden">Members</span>
+              <span className="hidden sm:inline">Members' schedule</span>
+            </button>
+          </div>
+
           {/* Range controls — minimalist chip presets. Custom inputs only
               appear when the user picks "Custom…" so the default state has
               just two compact rows of pills. Hidden on Sync Our Orbits.

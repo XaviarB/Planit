@@ -13,6 +13,7 @@ import {
   updateSlots,
 } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
+import { computeAnchorStyle } from "../lib/anchorStyle";
 
 /**
  * MyToolsDrawer — the "your toolkit" right-side drawer.
@@ -36,6 +37,7 @@ export default function MyToolsDrawer({
   memberId,
   onMemberUpdate, // ({slots?, templates?, calendars?}) => void
   focusSection,   // "busy" → start on "tell astral" tab (which is also default)
+  anchor,
 }) {
   const [tab, setTab] = useState("astral");
 
@@ -55,17 +57,21 @@ export default function MyToolsDrawer({
     { id: "calendars", label: "calendars",   icon: CalIcon },
   ];
 
+  // Floating bubble — anchored to the FAB orb instead of full-height drawer.
+  const bubbleStyle = computeAnchorStyle({ anchor, width: 460, height: 620 });
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex"
-      data-testid="tools-drawer"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm pointer-events-none" />
+    <>
+      {/* Tap-out scrim */}
       <div
-        className="relative ml-auto w-full sm:max-w-[560px] md:max-w-[640px] h-full overflow-y-auto astral-panel"
+        className="fixed inset-0 z-40"
+        data-testid="tools-drawer-scrim"
+        onMouseDown={() => onClose?.()}
+      />
+      <div
+        className="fixed z-50 astral-panel rounded-2xl border-2 border-slate-900 shadow-2xl overflow-y-auto"
+        style={bubbleStyle}
+        data-testid="tools-drawer"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -153,7 +159,7 @@ export default function MyToolsDrawer({
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

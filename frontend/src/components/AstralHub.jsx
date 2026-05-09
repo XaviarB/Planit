@@ -327,7 +327,7 @@ export default function AstralHub({
                   <button
                     type="button"
                     onClick={() => setMode("settings")}
-                    className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-sky,#e0f2fe)] transition"
+                    className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-blush)] transition"
                     aria-label="Astral settings"
                     title="Astral settings — tone, voice, default area"
                     data-testid="hub-settings-btn"
@@ -435,6 +435,7 @@ export default function AstralHub({
           if (!onGroupRefresh) return;
           onGroupRefresh((prev) => ({ ...(prev || {}), ...(g || {}) }));
         }}
+        anchor={anchor}
       />
       <MyToolsDrawer
         open={toolsOpen}
@@ -446,6 +447,7 @@ export default function AstralHub({
         memberId={memberId}
         focusSection={toolsIntent}
         onMemberUpdate={() => onGroupRefresh && onGroupRefresh((p) => p)}
+        anchor={anchor}
       />
 
       {/* Lock-in modal */}
@@ -553,7 +555,7 @@ function MenuBody({
           icon: History,
           title: "History",
           hint: "Every round Astral picked for the crew",
-          accent: "var(--pastel-sky, #e0f2fe)",
+          accent: "var(--pastel-blush)",
           testId: "hub-tile-history",
           onClick: () => openDrawer("history"),
         })}

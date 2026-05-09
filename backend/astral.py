@@ -109,10 +109,23 @@ def _persona_overlay(persona: Optional[Dict[str, Any]]) -> str:
 # --------------------------------------------------------------------------- #
 
 def _api_key() -> str:
-    key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
-        raise RuntimeError("EMERGENT_LLM_KEY missing from backend env")
-    return key
+    """Return the LLM key Astral should authenticate with.
+
+    We prefer a direct Google Gemini API key (`GEMINI_API_KEY` from
+    aistudio.google.com) when present — that lets the user bypass the
+    Emergent universal-key budget cap and pay Google directly. If it's
+    missing we fall back to the Emergent universal key, which still
+    routes Gemini through emergentintegrations.
+    """
+    direct = os.environ.get("GEMINI_API_KEY")
+    if direct:
+        return direct
+    fallback = os.environ.get("EMERGENT_LLM_KEY")
+    if fallback:
+        return fallback
+    raise RuntimeError(
+        "no LLM key found — set GEMINI_API_KEY or EMERGENT_LLM_KEY in backend .env"
+    )
 
 
 def _new_chat(system_message: str, session_suffix: str) -> LlmChat:

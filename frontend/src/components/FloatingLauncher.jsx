@@ -229,11 +229,11 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
                   className="font-heading font-black text-[11px] uppercase tracking-wider mb-0.5"
                   style={{ color: "var(--ink-mute)" }}
                 >
-                  hi, i'm astral ✨
+                  Hi, I'm Astral ✨
                 </div>
                 <div className="text-[12px] leading-snug">
-                  drag me to any edge of your screen.{" "}
-                  <span className="font-bold">tap me</span> or hit{" "}
+                  Drag me to any edge of your screen.{" "}
+                  <span className="font-bold">Tap me</span> or hit{" "}
                   <span className="hub-kbd">{isMac ? "⌘" : "Ctrl"}K</span> to plot your next hangout.
                 </div>
               </div>

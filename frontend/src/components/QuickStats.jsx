@@ -146,13 +146,6 @@ export default function QuickStats({
               ? stats.bestDay.colLabel
               : "—"
           }
-          sub={
-            stats.total === 0
-              ? "Add at least one member"
-              : stats.bestDay.minutes > 0
-              ? `${fmtMinutes(stats.bestDay.minutes)} when the whole crew is free`
-              : "No fully-free day yet — keep filling availability"
-          }
           testId="stat-free-day"
         />
 
@@ -165,11 +158,6 @@ export default function QuickStats({
               ? timeLabel(clashEntry.hour, clashEntry.minute)
               : "—"
           }
-          sub={
-            clashEntry && stats.total > 0
-              ? `${clashAvg.toFixed(1)}/${stats.total} usually busy · ${clashPct}% of crew`
-              : "Not enough data"
-          }
           testId="stat-crew-clash"
         />
 
@@ -179,15 +167,6 @@ export default function QuickStats({
           label="Total free overlap"
           value={
             stats.total > 0 ? fmtMinutes(stats.overlapMinutes) : "—"
-          }
-          sub={
-            stats.total === 0
-              ? "Add at least one member"
-              : stats.overlapMinutes > 0
-              ? `Whole crew free across ${stats.overlapDays} day${
-                  stats.overlapDays === 1 ? "" : "s"
-                } in this view`
-              : "No fully-free time in this window — try widening hours"
           }
           testId="stat-total-overlap"
         />

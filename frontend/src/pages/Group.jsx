@@ -872,6 +872,11 @@ function MemberRow({ m, isMe, code, isFocused, liveStatus, reasonMap, onToggleFo
           className="w-4 h-4 rounded-full border-2 border-slate-900 shrink-0"
           style={{ background: m.color }}
         />
+        {isMe && (
+          <span className="label-caps text-[10px] bg-[var(--pastel-yellow)] px-2 py-0.5 rounded-full border border-slate-900 shrink-0">
+            You
+          </span>
+        )}
         <span className="font-medium flex-1 min-w-0 truncate text-left" data-testid={`member-name-${m.id}`}>
           {m.name}
         </span>
@@ -885,32 +890,27 @@ function MemberRow({ m, isMe, code, isFocused, liveStatus, reasonMap, onToggleFo
         />
 
         {isMe && (
-          <>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
                 setEditing(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                  setEditing(true);
-                }
-              }}
-              className="opacity-0 group-hover/member:opacity-100 transition w-6 h-6 rounded-full grid place-items-center cursor-pointer"
-              style={{ color: "var(--ink-soft)" }}
-              data-testid={`member-rename-btn-${m.id}`}
-              aria-label="Edit your name"
-              title="Edit your name"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </span>
-            <span className="label-caps text-[10px] bg-[var(--pastel-yellow)] px-2 py-0.5 rounded-full border border-slate-900">
-              you
-            </span>
-          </>
+              }
+            }}
+            className="opacity-0 group-hover/member:opacity-100 transition w-6 h-6 rounded-full grid place-items-center cursor-pointer"
+            style={{ color: "var(--ink-soft)" }}
+            data-testid={`member-rename-btn-${m.id}`}
+            aria-label="Edit your name"
+            title="Edit your name"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </span>
         )}
       </button>
     </li>

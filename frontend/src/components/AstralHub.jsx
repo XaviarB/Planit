@@ -310,14 +310,14 @@ export default function AstralHub({
                   <AstralBot size={26} waving />
                 </span>
                 <div className="flex flex-col leading-none">
-                  <span className="font-heading font-black text-base lowercase tracking-tight">
-                    astral
+                  <span className="font-heading font-black text-base tracking-tight">
+                    Astral
                   </span>
                   <span
                     className="hidden sm:inline text-[10px] uppercase tracking-wider font-bold mt-0.5"
                     style={{ color: "var(--ink-mute)" }}
                   >
-                    hangout concierge
+                    Hangout Concierge
                   </span>
                 </div>
               </div>
@@ -328,7 +328,7 @@ export default function AstralHub({
                     onClick={() => setMode("settings")}
                     className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center bg-white hover:bg-[var(--pastel-sky,#e0f2fe)] transition"
                     aria-label="Astral settings"
-                    title="astral settings — tone, voice, default area"
+                    title="Astral settings — tone, voice, default area"
                     data-testid="hub-settings-btn"
                   >
                     <Settings className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -474,7 +474,7 @@ function MenuBody({
             className="label-caps text-[10px]"
             style={{ color: "var(--ink-mute)" }}
           >
-            what's the vibe?
+            What's the vibe?
           </label>
           <span
             className="hub-kbd"
@@ -512,7 +512,7 @@ function MenuBody({
           className="text-[10px] mt-1.5 leading-snug"
           style={{ color: "var(--ink-mute)" }}
         >
-          free-form — astral handles "tonight", "this fri after 8", etc.
+          Free-form — Astral handles "tonight", "this fri after 8", etc.
         </div>
         {errMsg && (
           <div className="mt-2 text-[11px] px-2 py-1.5 rounded-lg border-2 border-slate-900 bg-[var(--pastel-peach)] font-medium">
@@ -525,32 +525,32 @@ function MenuBody({
       <div className="flex flex-col gap-2">
         {tile({
           icon: Shuffle,
-          title: "remix",
-          hint: "redirect picks: cheaper, fancier, diff. vibe…",
+          title: "Remix",
+          hint: "Redirect picks: cheaper, fancier, diff. vibe…",
           accent: "var(--pastel-lavender)",
           testId: "hub-tile-remix",
           onClick: () => openDrawer("remix"),
         })}
         {tile({
           icon: Clock,
-          title: "i'm busy…",
-          hint: "natural-language → busy slots auto-merged",
+          title: "I'm busy…",
+          hint: "Natural-language → busy slots auto-merged",
           accent: "var(--pastel-peach)",
           testId: "hub-tile-busy",
           onClick: () => openTools("busy"),
         })}
         {tile({
           icon: History,
-          title: "history",
-          hint: "every round astral picked for the crew",
+          title: "History",
+          hint: "Every round Astral picked for the crew",
           accent: "var(--pastel-mint)",
           testId: "hub-tile-history",
           onClick: () => openDrawer("history"),
         })}
         {tile({
           icon: Wand2,
-          title: "toolkit",
-          hint: "location, calendar sync, group prefs",
+          title: "Toolkit",
+          hint: "Location, calendar sync, group prefs",
           accent: "var(--pastel-yellow)",
           testId: "hub-tile-tools",
           onClick: () => openTools(null),
@@ -562,7 +562,7 @@ function MenuBody({
         className="flex items-center justify-center gap-1 text-[10px] font-medium"
         style={{ color: "var(--ink-mute)" }}
       >
-        <span>powered by gemini 2.5 flash</span>
+        <span>Powered by Gemini 2.5 Flash</span>
         <ArrowRight className="w-2.5 h-2.5" />
         <span>real venues only</span>
       </div>

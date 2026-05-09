@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Sparkles, X, Send, Shuffle, Clock, History, Wand2,
+  Sparkles, X, Send, Shuffle, Clock, Wand2,
   ArrowRight, ArrowLeft, Loader2, RotateCw, Maximize2,
   Settings, Save,
 } from "lucide-react";
@@ -550,14 +550,6 @@ function MenuBody({
           accent: "var(--pastel-peach)",
           testId: "hub-tile-busy",
           onClick: () => openTools("busy"),
-        })}
-        {tile({
-          icon: History,
-          title: "History",
-          hint: "Every round Astral picked for the crew",
-          accent: "var(--pastel-blush)",
-          testId: "hub-tile-history",
-          onClick: () => openDrawer("history"),
         })}
         {tile({
           icon: Wand2,

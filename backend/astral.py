@@ -130,13 +130,15 @@ def _api_key() -> str:
 
 def _new_chat(system_message: str, session_suffix: str) -> LlmChat:
     """One LlmChat per request — Astral is stateless across calls. We only use
-    history within a single helper call (single user message). gemini-2.5-pro
-    is the recommended model for tool/structured output reliability."""
+    history within a single helper call (single user message). gemini-2.5-flash
+    is the free-tier model from Google AI Studio — fast, JSON-reliable, and
+    covers our creative-concierge needs without the paid Pro quota.
+    """
     return LlmChat(
         api_key=_api_key(),
         session_id=f"astral-{session_suffix}-{uuid.uuid4().hex[:8]}",
         system_message=system_message,
-    ).with_model("gemini", "gemini-2.5-pro")
+    ).with_model("gemini", "gemini-2.5-flash")
 
 
 def _strip_code_fences(s: str) -> str:

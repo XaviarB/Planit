@@ -562,7 +562,7 @@ function MenuBody({
         className="flex items-center justify-center gap-1 text-[10px] font-medium"
         style={{ color: "var(--ink-mute)" }}
       >
-        <span>powered by gemini 2.5 pro</span>
+        <span>powered by gemini 2.5 flash</span>
         <ArrowRight className="w-2.5 h-2.5" />
         <span>real venues only</span>
       </div>

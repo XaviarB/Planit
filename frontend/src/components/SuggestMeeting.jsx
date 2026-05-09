@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { Sparkles, Copy, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { buildTimeSlots, timeLabel, buildSlotMap, buildBusyIndex, memberStatusAt, dateToDayIdx } from "../lib/schedule";
+import { computeAnchorStyle } from "../lib/anchorStyle";
 
 /**
  * Computes top N time slots where the most members are free, at the active
@@ -19,11 +20,16 @@ export default function SuggestMeeting({
   triggerClassName,
   wrapperClassName,
   // Controlled-open mode — when these are passed, the parent owns the
-  // open/close state and we render the popover as a centered modal.
-  // Used by the Astral hub which fires "Suggest a time" from a tile.
+  // open/close state and we render the popover as a free-floating bubble
+  // next to the FAB orb (matching AstralDrawer / MyToolsDrawer). Used by
+  // the Astral hub which fires "Suggest a time" from a tile.
   controlledOpen,
   onOpenChange,
   hideTrigger = false,
+  // FAB anchor (side + offset). When provided in controlled mode, the
+  // popover renders as a floating bubble next to the orb instead of a
+  // centered modal. Falls back to centered modal if absent.
+  anchor,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = typeof controlledOpen === "boolean";
@@ -186,10 +192,17 @@ export default function SuggestMeeting({
 
       {open && !confirmFor && (
         <>
-          {/* Modal overlay (controlled-open mode only). Tap outside to close. */}
+          {/* Tap-out scrim (controlled-open mode only). Transparent when
+              anchored next to the FAB so the surrounding UI stays visible
+              — matches AstralDrawer's bubble pattern. Falls back to a
+              soft dim when no anchor is supplied (legacy centered modal). */}
           {isControlled && (
             <div
-              className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm"
+              className={
+                anchor
+                  ? "fixed inset-0 z-40"
+                  : "fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm"
+              }
               onClick={() => setOpen(false)}
               data-testid="suggest-meeting-overlay"
             />
@@ -197,12 +210,22 @@ export default function SuggestMeeting({
           <div
             className={
               isControlled
-                ? "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,360px)] z-[61] neo-card p-4 max-h-[80vh] overflow-y-auto"
+                ? (anchor
+                    ? "fixed z-50 neo-card p-4 overflow-y-auto rounded-2xl border-2 border-slate-900"
+                    : "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,360px)] z-[61] neo-card p-4 max-h-[80vh] overflow-y-auto")
                 : "absolute right-0 top-full mt-3 w-[340px] z-40 neo-card p-4"
             }
-            style={{ background: "var(--card)" }}
+            style={
+              isControlled && anchor
+                ? {
+                    background: "var(--card)",
+                    ...computeAnchorStyle({ anchor, width: 360, height: 480 }),
+                  }
+                : { background: "var(--card)" }
+            }
             data-testid="suggest-meeting-popover"
             role="dialog"
+            onClick={(e) => e.stopPropagation()}
           >
           <div className="flex items-center justify-between mb-3">
             <div className="label-caps flex items-center gap-2">

@@ -18,7 +18,6 @@ import AvailabilityEditor from "../components/AvailabilityEditor";
 import QuickStats from "../components/QuickStats";
 import LegendEditor from "../components/LegendEditor";
 import GroupMenu from "../components/GroupMenu";
-import SuggestMeeting from "../components/SuggestMeeting";
 import MembersSchedule from "../components/MembersSchedule";
 import ShareMenu from "../components/ShareMenu";
 import FloatingLauncher from "../components/FloatingLauncher";
@@ -38,7 +37,6 @@ export default function GroupPage() {
   const persisted = getGroupViewState(code) || {};
   const [tab, setTab] = useState(persisted.tab || "dates"); // dates | members
   const [editMode, setEditMode] = useState(false);
-  const [suggestMeetingOpen, setSuggestMeetingOpen] = useState(false);
   const [rangeStart, setRangeStart] = useState(persisted.rangeStart || isoToday());
   const [rangeEnd, setRangeEnd] = useState(persisted.rangeEnd || isoPlus(isoToday(), 6));
   const [hourFrom, setHourFrom] = useState(typeof persisted.hourFrom === "number" ? persisted.hourFrom : 0);
@@ -748,24 +746,16 @@ export default function GroupPage() {
             setGroup(updater);
           }
         }}
-        onSuggestMeeting={() => setSuggestMeetingOpen(true)}
-      />
-
-      {/* Hidden controlled-mode SuggestMeeting — the trigger lives inside
-          the Astral hub tile column now, but the popup itself renders here
-          as a centered modal whenever the hub fires `onSuggestMeeting`. */}
-      <SuggestMeeting
-        members={visibleMembers}
-        columns={columns}
-        mode={gridMode}
-        hourFrom={hourFrom}
-        hourTo={hourTo}
-        minuteStep={60}
-        groupName={group.name}
-        groupCode={group.code}
-        controlledOpen={suggestMeetingOpen}
-        onOpenChange={setSuggestMeetingOpen}
-        hideTrigger
+        suggestMeetingProps={{
+          members: visibleMembers,
+          columns,
+          mode: gridMode,
+          hourFrom,
+          hourTo,
+          minuteStep: 60,
+          groupName: group.name,
+          groupCode: group.code,
+        }}
       />
     </div>
   );

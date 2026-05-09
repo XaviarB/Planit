@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import AstralHub from "./AstralHub";
 import AstralBot from "./AstralBot";
+import SuggestMeeting from "./SuggestMeeting";
 
 const POS_KEY = "planit:fab-pos-v2"; // JSON: {side, offset}
 const HINT_KEY = "planit:fab-hint-seen-v1"; // "1" once dismissed
@@ -27,8 +28,9 @@ const LEGACY_SIDE_KEY = "planit:fab-side";
 //   - "/"            → open the hub (same behaviour as Slack/Discord/etc.),
 //                      ignored while typing in inputs/textareas
 //   - Esc            → close (handled inside the Hub)
-export default function FloatingLauncher({ group, memberId, onGroupRefresh, code, defaultSide, onSuggestMeeting }) {
+export default function FloatingLauncher({ group, memberId, onGroupRefresh, code, defaultSide, onSuggestMeeting, suggestMeetingProps }) {
   const [hubOpen, setHubOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [pos, setPos] = useState(() => loadInitialPos(defaultSide));
   const [freePos, setFreePos] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -295,9 +297,26 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
         onGroupRefresh={onGroupRefresh}
         onSuggestMeeting={() => {
           setHubOpen(false);
-          onSuggestMeeting && onSuggestMeeting();
+          if (suggestMeetingProps) {
+            setSuggestOpen(true);
+          } else {
+            onSuggestMeeting && onSuggestMeeting();
+          }
         }}
       />
+
+      {/* Suggest-a-time floating bubble — anchored next to the FAB orb so
+          it behaves like the Remix / I'm busy drawers instead of taking
+          over the screen as a centered modal. */}
+      {suggestMeetingProps && (
+        <SuggestMeeting
+          {...suggestMeetingProps}
+          controlledOpen={suggestOpen}
+          onOpenChange={setSuggestOpen}
+          anchor={pos}
+          hideTrigger
+        />
+      )}
     </>
   );
 }

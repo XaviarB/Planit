@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Sparkles, Copy, Check, X } from "lucide-react";
+import { Sparkles, Copy, Check, X, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { buildTimeSlots, timeLabel, buildSlotMap, buildBusyIndex, memberStatusAt, dateToDayIdx } from "../lib/schedule";
 import { computeAnchorStyle } from "../lib/anchorStyle";
@@ -30,6 +30,9 @@ export default function SuggestMeeting({
   // popover renders as a floating bubble next to the orb instead of a
   // centered modal. Falls back to centered modal if absent.
   anchor,
+  // Optional callback — when provided, a back-arrow button appears in
+  // the header that closes this bubble and reopens the Astral hub.
+  onBack,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = typeof controlledOpen === "boolean";
@@ -231,14 +234,27 @@ export default function SuggestMeeting({
             <div className="label-caps flex items-center gap-2">
               <Sparkles className="w-4 h-4" /> Top free times
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="opacity-60 hover:opacity-100"
-              aria-label="Close"
-              data-testid="suggest-close-btn"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center hover:bg-[var(--pastel-mint)] transition"
+                  aria-label="Back to Astral hub"
+                  title="Back to Astral hub"
+                  data-testid="suggest-back-btn"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </button>
+              )}
+              <button
+                onClick={() => setOpen(false)}
+                className="w-7 h-7 rounded-full border-2 border-slate-900 grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+                aria-label="Close"
+                data-testid="suggest-close-btn"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
 
           {disabled ? (

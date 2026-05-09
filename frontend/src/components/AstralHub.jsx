@@ -36,6 +36,7 @@ import { copyToClipboard } from "../lib/clipboard";
 export default function AstralHub({
   open,
   onClose,
+  onReopen,
   anchor,
   group,
   memberId,
@@ -420,6 +421,15 @@ export default function AstralHub({
           setAstralOpen(false);
           setAstralIntent(null);
         }}
+        onBack={
+          onReopen
+            ? () => {
+                setAstralOpen(false);
+                setAstralIntent(null);
+                onReopen();
+              }
+            : undefined
+        }
         group={group}
         memberId={memberId}
         suggestedWindow={astralIntent === "suggest" ? windowBlurb : ""}
@@ -443,6 +453,15 @@ export default function AstralHub({
           setToolsOpen(false);
           setToolsIntent(null);
         }}
+        onBack={
+          onReopen
+            ? () => {
+                setToolsOpen(false);
+                setToolsIntent(null);
+                onReopen();
+              }
+            : undefined
+        }
         group={group}
         memberId={memberId}
         focusSection={toolsIntent}

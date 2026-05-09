@@ -290,6 +290,7 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
       <AstralHub
         open={hubOpen}
         onClose={() => setHubOpen(false)}
+        onReopen={() => setHubOpen(true)}
         anchor={pos}
         group={group}
         memberId={memberId}
@@ -315,6 +316,10 @@ export default function FloatingLauncher({ group, memberId, onGroupRefresh, code
           onOpenChange={setSuggestOpen}
           anchor={pos}
           hideTrigger
+          onBack={() => {
+            setSuggestOpen(false);
+            setHubOpen(true);
+          }}
         />
       )}
     </>

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import {
   Sparkles, X, Send, MapPin, Star, ExternalLink, MessageSquare,
   Loader2, Compass, Quote, ChevronDown, Tag, AlertTriangle, Lock,
-  Shuffle, Clock, Pin, Trash2, ChevronRight,
+  Shuffle, Clock, Pin, Trash2, ChevronRight, ArrowLeft,
 } from "lucide-react";
 import {
   astralSuggest,
@@ -77,6 +77,7 @@ const TONE_COLOR_MAP = {
 export default function AstralDrawer({
   open,
   onClose,
+  onBack,
   group,
   onGroupUpdate,
   memberId,
@@ -486,15 +487,29 @@ export default function AstralDrawer({
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full border-2 border-slate-900 grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
-            aria-label="Close Astral"
-            data-testid="astral-close-btn"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="w-9 h-9 rounded-full border-2 border-slate-900 grid place-items-center hover:bg-[var(--pastel-mint)] transition"
+                aria-label="Back to Astral hub"
+                title="Back to Astral hub"
+                data-testid="astral-back-btn"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full border-2 border-slate-900 grid place-items-center hover:bg-[var(--pastel-yellow)] transition"
+              aria-label="Close Astral"
+              data-testid="astral-close-btn"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}

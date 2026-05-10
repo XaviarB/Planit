@@ -21,39 +21,56 @@ import GroupMenu from "../components/GroupMenu";
 import MembersSchedule from "../components/MembersSchedule";
 import ShareMenu from "../components/ShareMenu";
 import { HangoutsList } from "../components/Hangouts";
-import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Settings, Sparkles, MapPin } from "lucide-react";
+import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Settings, Sparkles, MapPin, Smartphone } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomTabBar from "../components/BottomTabBar";
 import AstralHub from "../components/AstralHub";
 import SuggestMeeting from "../components/SuggestMeeting";
 import FloatingLauncher from "../components/FloatingLauncher";
+import LayoutToggle, { getLayoutMode } from "../components/LayoutToggle";
 
 /**
- * useIsDesktop — viewport breakpoint hook.
+ * useIsDesktop — viewport breakpoint hook with manual-override support.
  * The Group page renders TWO completely different layouts:
  *   - desktop (>=1024px): the original 12-col grid + sidebar + FAB launcher
  *   - mobile  (<1024px) : the new native-app stack with bottom tab bar
- * We watch matchMedia so the UI re-flows live as the user resizes.
+ *
+ * We watch matchMedia so the UI re-flows live as the user resizes, *and* we
+ * watch the LayoutToggle override (localStorage `planit:layout-mode`) so the
+ * user can force "Mobile" or "Desktop" while keeping the actual window size.
+ * "Auto" mode (the default) falls back to the matchMedia breakpoint.
+ *
  * Defaults to `true` server/SSR so first paint on desktop avoids a flash
  * of the mobile shell.
  */
 function useIsDesktop(query = "(min-width: 1024px)") {
-  const get = () => {
+  const getAuto = () => {
     if (typeof window === "undefined" || !window.matchMedia) return true;
     return window.matchMedia(query).matches;
   };
-  const [isDesktop, setIsDesktop] = useState(get);
+  const resolve = (autoVal, mode) => {
+    if (mode === "mobile") return false;
+    if (mode === "desktop") return true;
+    return autoVal;
+  };
+  const [isDesktop, setIsDesktop] = useState(() => resolve(getAuto(), getLayoutMode()));
+
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
     const mq = window.matchMedia(query);
-    const onChange = (e) => setIsDesktop(e.matches);
-    // Modern browsers
-    if (mq.addEventListener) mq.addEventListener("change", onChange);
-    else mq.addListener(onChange);
-    setIsDesktop(mq.matches);
+    const recompute = () => setIsDesktop(resolve(mq.matches, getLayoutMode()));
+    const onMq = () => recompute();
+    if (mq.addEventListener) mq.addEventListener("change", onMq);
+    else mq.addListener(onMq);
+    // Listen for manual overrides (same tab + cross tab).
+    window.addEventListener("planit:layout-mode-change", recompute);
+    window.addEventListener("storage", recompute);
+    recompute();
     return () => {
-      if (mq.removeEventListener) mq.removeEventListener("change", onChange);
-      else mq.removeListener(onChange);
+      if (mq.removeEventListener) mq.removeEventListener("change", onMq);
+      else mq.removeListener(onMq);
+      window.removeEventListener("planit:layout-mode-change", recompute);
+      window.removeEventListener("storage", recompute);
     };
   }, [query]);
   return isDesktop;
@@ -434,8 +451,9 @@ export default function GroupPage() {
           {/* Spacer pushes the right cluster to the opposite edge. */}
           <div className="flex-1 min-w-[16px]" />
 
-          {/* Right cluster — (optional) Editing badge + theme toggle. View-tabs moved to Row 2. */}
+          {/* Right cluster — Layout preview toggle + (optional) Editing badge + theme toggle. */}
           <div className="flex items-center gap-2 sm:gap-3">
+            <LayoutToggle variant="compact" className="hidden md:inline-flex" />
             {editMode && (
               <span
                 className="px-3 py-2 rounded-full border-2 border-slate-900 text-sm font-bold font-heading bg-slate-900 text-white"
@@ -1287,6 +1305,23 @@ export default function GroupPage() {
                 </span>
                 <ChevronRight className="w-4 h-4" />
               </Link>
+
+              {/* Layout preview override — lets the user flip between the
+                  mobile-app and desktop layouts without resizing the window.
+                  "Auto" (default) re-flows at the 1024px breakpoint. */}
+              <div
+                className="neo-card p-4"
+                style={{ background: "var(--pastel-lavender)" }}
+                data-testid="layout-toggle-card"
+              >
+                <div className="label-caps mb-2 flex items-center gap-2">
+                  <Smartphone className="w-4 h-4" /> Layout preview
+                </div>
+                <p className="text-[11px] mb-3" style={{ color: "var(--ink-soft)" }}>
+                  Force the mobile or desktop layout, or let it pick automatically based on window size.
+                </p>
+                <LayoutToggle variant="full" />
+              </div>
             </div>
           )}
         </main>

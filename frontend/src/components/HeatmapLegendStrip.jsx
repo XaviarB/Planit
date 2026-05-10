@@ -1,10 +1,9 @@
 /**
- * HeatmapLegendStrip — compact 5-box gradient legend.
+ * HeatmapLegendStrip — compact 5-cell gradient legend.
  *
- * Renders a single horizontal strip of the heatmap palette, with "Free"
- * on the left and "Not free" on the right. Replaces the verbose stacked
- * `LegendEditor` block + helper text on mobile so the user gets the full
- * meaning of the heat colours in a glance.
+ * Five separate, individually-bordered cells (free → not free) flanked by
+ * "FREE" and "NOT FREE" labels. Sized small enough to fit on a single row
+ * across the mobile heatmap card without horizontal scroll.
  *
  * Colour stops (left → right):
  *   --heat-all → --heat-3 → --heat-2 → --heat-1 → --heat-0
@@ -23,7 +22,7 @@ export default function HeatmapLegendStrip({ className = "" }) {
   ];
   return (
     <div
-      className={`neo-card p-3 flex items-center gap-3 ${className}`}
+      className={`neo-card p-3 flex items-center justify-between gap-2 ${className}`}
       data-testid="heatmap-legend-strip"
     >
       <span
@@ -32,16 +31,16 @@ export default function HeatmapLegendStrip({ className = "" }) {
       >
         Free
       </span>
-      <div
-        className="flex-1 grid grid-cols-5 h-8 rounded-md overflow-hidden border-2"
-        style={{ borderColor: "var(--ink)" }}
-        aria-hidden="true"
-      >
+      <div className="flex items-center gap-1.5" aria-hidden="true">
         {STOPS.map((stop, i) => (
           <span
             key={i}
             data-testid={`legend-strip-${i}`}
-            style={{ background: stop }}
+            className="w-6 h-6 rounded-md border-2 shrink-0"
+            style={{
+              borderColor: "var(--ink)",
+              background: stop,
+            }}
           />
         ))}
       </div>

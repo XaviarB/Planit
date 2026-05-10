@@ -225,13 +225,15 @@ export default function HeatmapGrid({
         {transposed ? (
           /* Mobile: 5-cell gradient inline with the heading — only thing
              above the heatmap, no separate legend card. Cells are sized
-             tightly so the row never clips on narrow phones (≤375px). */
+             tightly so the row never clips on narrow phones (≤375px).
+             Order: NOT FREE (darkest, heat-0) on the left → FREE (lightest,
+             heat-all) on the right, mirroring how people read severity. */
           <div
             className="flex items-center gap-1 shrink-0"
             aria-hidden="true"
             data-testid="heatmap-legend-strip"
           >
-            {["var(--heat-all)", "var(--heat-3)", "var(--heat-2)", "var(--heat-1)", "var(--heat-0)"].map(
+            {["var(--heat-0)", "var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-all)"].map(
               (stop, i) => (
                 <span
                   key={i}

@@ -786,11 +786,68 @@ export default function GroupPage() {
 
           {/* Content */}
           {tab === "members" ? (
-            <MembersSchedule
-              members={visibleMembers}
-              reasons={group.reasons}
-              columns={columns}
-            />
+            <div className="space-y-4">
+              {/* Solo-member nudge — when you're the only one in the group,
+                  the Members' schedule view is otherwise pretty empty. Drop
+                  in a Bring Your Crew card with share controls so onboarding
+                  doesn't dead-end on a single bare row. Disappears the moment
+                  anyone else joins. */}
+              {group.members.length === 1 && (
+                <div
+                  className="neo-card p-5"
+                  style={{ background: "var(--pastel-peach)" }}
+                  data-testid="members-invite-card"
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <div
+                      className="w-10 h-10 rounded-xl border-2 border-slate-900 grid place-items-center shrink-0"
+                      style={{ background: "var(--pastel-mint)" }}
+                      aria-hidden="true"
+                    >
+                      <UserPlus className="w-5 h-5" strokeWidth={2.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-heading font-black text-base leading-tight">
+                        Bring your crew
+                      </div>
+                      <div
+                        className="text-xs mt-0.5"
+                        style={{ color: "var(--ink-soft)" }}
+                      >
+                        Planit shines once at least 2 people log busy times.
+                        Share your group code or link below to get started.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 min-w-0">
+                      <ShareMenu
+                        url={`${window.location.origin}/g/${code}`}
+                        groupName={group.name}
+                      />
+                    </div>
+                    <button
+                      className="neo-btn ghost flex items-center justify-between gap-2 text-sm sm:w-auto w-full"
+                      onClick={onCopyCode}
+                      data-testid="members-invite-copy-code-btn"
+                    >
+                      <span className="label-caps">Code</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono tracking-widest font-bold">
+                          {group.code}
+                        </span>
+                        <Copy className="w-4 h-4" />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+              <MembersSchedule
+                members={visibleMembers}
+                reasons={group.reasons}
+                columns={columns}
+              />
+            </div>
           ) : editMode && me ? (
             <AvailabilityEditor
               ref={editorRef}
@@ -911,12 +968,18 @@ export default function GroupPage() {
           </button>
 
           <div className="flex-1 min-w-0 px-1 text-center">
-            <div
-              className="text-[9px] uppercase tracking-widest font-extrabold gradient-text leading-none"
+            <button
+              type="button"
+              onClick={onCopyCode}
+              title="Tap to copy group code"
+              aria-label={`Group code ${group.code}, tap to copy`}
+              className="text-[9px] uppercase tracking-widest font-extrabold gradient-text leading-none inline-flex items-center gap-1 mx-auto hover:opacity-80 transition cursor-pointer"
               style={{ fontFamily: "Outfit, system-ui, sans-serif" }}
+              data-testid="mobile-code-copy-btn"
             >
-              Code · {group.code}
-            </div>
+              <span>Code · {group.code}</span>
+              <Copy className="w-2.5 h-2.5" strokeWidth={2.5} />
+            </button>
             <div
               className="font-heading font-black text-base leading-tight truncate flex items-center gap-1.5 justify-center mt-0.5"
               data-testid="group-title"

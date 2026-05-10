@@ -419,7 +419,9 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
           in favour of a free-floating 5-cell gradient — same look as the
           inline strip on Sync Our Orbits, no FREE/NOT FREE labels. The strip
           is centered over the heatmap below it so it reads as the legend
-          for the grid rather than a left-anchored toolbar element. */}
+          for the grid rather than a left-anchored toolbar element.
+          Order: NOT FREE (darkest) on the left → FREE (lightest) on the
+          right, matching the Plan tab. */}
       <div className="mb-4">
         {orientation === "days-rows" ? (
           <div
@@ -427,7 +429,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
             aria-hidden="true"
             data-testid="editor-legend-strip"
           >
-            {["var(--heat-all)", "var(--heat-3)", "var(--heat-2)", "var(--heat-1)", "var(--heat-0)"].map(
+            {["var(--heat-0)", "var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-all)"].map(
               (stop, i) => (
                 <span
                   key={i}
@@ -639,10 +641,13 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
       >
         {orientation === "days-rows" ? (
           // ── Transposed (mobile): days on rows, hours on columns ──────
+          // Cells are sized chunkier (28×34) than the read-only heatmap to
+          // give thumbs a more confident tap target while editing and to
+          // balance the visual padding around the grid.
           <div
             className="grid gap-1 min-w-fit select-none"
             style={{
-              gridTemplateColumns: `52px repeat(${timeSlots.length}, minmax(22px, 1fr))`,
+              gridTemplateColumns: `52px repeat(${timeSlots.length}, minmax(28px, 1fr))`,
             }}
           >
             <div />
@@ -686,7 +691,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
                       className="heat-cell rounded-md flex items-center justify-center border-2"
                       style={{
                         background: bg,
-                        minHeight: 28,
+                        minHeight: 34,
                         borderColor: borderStyle,
                         opacity: status === "busy" ? 1 : 0.55,
                         touchAction: "none",

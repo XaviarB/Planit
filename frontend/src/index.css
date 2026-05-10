@@ -531,6 +531,16 @@ html:not(.dark) .gradient-text {
     to   { transform: translateY(0);  opacity: 1; }
 }
 
+/* Mobile bottom-tab content swap — slides each tab in from the right with
+   a soft fade so switching tabs feels like a native page transition. */
+@keyframes tab-content-in {
+    from { transform: translateX(12px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+.tab-content-anim {
+    animation: tab-content-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
 @keyframes pop-in {
     from {
         opacity: 0;

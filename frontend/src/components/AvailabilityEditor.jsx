@@ -381,7 +381,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
               selected={activeReason === null}
               onClick={() => setActiveReason(null)}
               color="#ffffff"
-              label="No reason"
+              label="Busy"
               border
               testId="reason-chip-none"
             />
@@ -749,7 +749,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
           <span className="inline-block w-4 h-4 rounded border-2 border-slate-900 opacity-55" style={{ background: "var(--card-soft, var(--card))" }} /> Free
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-4 h-4 rounded border-2 border-slate-900" style={{ background: currentSkin.busyColor }} /> Busy (no reason)
+          <span className="inline-block w-4 h-4 rounded border-2 border-slate-900" style={{ background: currentSkin.busyColor }} /> Busy
         </span>
       </div>
     </div>

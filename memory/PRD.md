@@ -15,6 +15,13 @@ The user iteratively requests UI/UX improvements to a no-account group availabil
 - Drawers anchored to the FAB orb: AstralDrawer (remix/history), MyToolsDrawer (busy/toolkit)
 
 ## Implementation log
+- **Feb 2026** — Mobile polish bundle (Mon-first editor + Busy chip + tab animation + Customize fit):
+  - `Group.jsx` (mobile branch) — added `editorColumnsMobile`: rotates the editor's `columns` array so Monday is first, mirroring the Plan-tab heatmap. Date-mode only; weekly mode already starts on `d0`.
+  - `AvailabilityEditor.jsx` — renamed the no-reason chip from **"No reason"** → **"Busy"** and the legend swatch from **"Busy (no reason)"** → **"Busy"** (applies to all layouts, not mobile-only).
+  - `Group.jsx` — wrapped the mobile `<main>` content in a `key={`tab-${mainTab}`} className="tab-content-anim"` block so React remounts on tab swap, triggering a slide-in fade.
+  - `index.css` — added `@keyframes tab-content-in` (12px → 0px translateX, 0 → 1 opacity, 320ms ease).
+  - `Customize.jsx` — `Section` header now stacks vertically on mobile (`flex-col sm:flex-row`) and the Save button stretches full-width on phones so the subtitle no longer wraps into a cramped 7-line column.
+
 - **Feb 2026** — Mobile editor transposed (matches the heatmap):
   - `AvailabilityEditor.jsx` — new `orientation` prop (defaults to `"hours-rows"` for desktop). When set to `"days-rows"`, the editable grid renders 7 day rows × 24 hour columns with the same compact hour-strip labels (every 3rd hour) used by `HeatmapGrid`. Tap & drag painting still works via the existing `data-cell-coord` touchmove handler — only the visual layout flipped.
   - `Group.jsx` (mobile branch) — passes `orientation="days-rows"` to the editor too, so My Schedule tab matches the Plan-tab heatmap shape.

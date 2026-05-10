@@ -124,15 +124,15 @@ function Section({ icon: Icon, title, subtitle, children, onSave, saving, testId
       className="neo-card p-5 sm:p-6 mb-5 pop-in"
       data-testid={testId}
     >
-      <header className="flex items-start justify-between gap-3 mb-4">
-        <div className="flex items-start gap-3">
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+        <div className="flex items-start gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-[var(--pastel-mint)] border-2 border-slate-900 grid place-items-center shrink-0">
             <Icon className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="font-heading font-black text-xl">{title}</h2>
+          <div className="min-w-0">
+            <h2 className="font-heading font-black text-xl leading-tight">{title}</h2>
             {subtitle && (
-              <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+              <p className="text-sm leading-snug" style={{ color: "var(--ink-soft)" }}>
                 {subtitle}
               </p>
             )}
@@ -142,7 +142,7 @@ function Section({ icon: Icon, title, subtitle, children, onSave, saving, testId
           <button
             onClick={onSave}
             disabled={!!saving}
-            className="neo-btn flex items-center gap-2 disabled:opacity-50"
+            className="neo-btn flex items-center justify-center gap-2 disabled:opacity-50 w-full sm:w-auto shrink-0"
             data-testid={`${testId}-save`}
           >
             {saving ? (

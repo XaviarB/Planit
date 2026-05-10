@@ -321,6 +321,22 @@ export default function GroupPage() {
         label: formatDateShort(iso),
       }));
 
+  // Mobile editor variant — rotate the columns so Monday is first. Date-mode
+  // ranges that begin mid-week (e.g. "Sun → Sat") would otherwise read as a
+  // Sun-first calendar in the editor; this nudges them to the European
+  // Mon-first convention without changing the underlying date set.
+  // Weekly mode already starts on d0 = Monday so it's a no-op.
+  const editorColumnsMobile = (() => {
+    if (!columns.length) return columns;
+    if (isRecurring) return columns; // already Mon-first
+    const idx = columns.findIndex((c) => {
+      const d = new Date(c.key + "T00:00:00");
+      return !Number.isNaN(d.getTime()) && d.getDay() === 1; // 1 = Mon
+    });
+    if (idx <= 0) return columns;
+    return [...columns.slice(idx), ...columns.slice(0, idx)];
+  })();
+
   // Sync Our Orbits (heatmap, non-edit) is locked to a Mon→Sun week, full
   // 24-hour day, hourly precision. The user can scrub through past/future
   // weeks via the week navigator — that's the only thing that changes here.
@@ -921,8 +937,10 @@ export default function GroupPage() {
           </div>
         </header>
 
-        {/* ─── TAB CONTENT ─── */}
-        <main className="px-4 py-4 space-y-4">
+        {/* ─── TAB CONTENT ───
+            Re-keyed by `mainTab` so React remounts the subtree on each
+            tab swap, triggering the `.tab-content-anim` slide-fade entrance. */}
+        <main className="px-4 py-4 space-y-4 tab-content-anim" key={`tab-${mainTab}`}>
           {/* PLAN TAB — heatmap, edit availability, sub-tab segmented */}
           {mainTab === "plan" && (
             <div className="space-y-4">
@@ -1109,7 +1127,7 @@ export default function GroupPage() {
                   code={code}
                   me={me}
                   reasons={group.reasons}
-                  columns={columns}
+                  columns={editorColumnsMobile}
                   mode={gridMode}
                   hourFrom={isRecurring ? 0 : hourFrom}
                   hourTo={isRecurring ? 23 : hourTo}

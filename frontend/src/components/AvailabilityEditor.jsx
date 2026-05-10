@@ -417,11 +417,13 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
       {/* Reason helper text + customize labels panel.
           On mobile (transposed grid) we drop the verbose instructional text
           in favour of a free-floating 5-cell gradient — same look as the
-          inline strip on Sync Our Orbits, no FREE/NOT FREE labels. */}
+          inline strip on Sync Our Orbits, no FREE/NOT FREE labels. The strip
+          is centered over the heatmap below it so it reads as the legend
+          for the grid rather than a left-anchored toolbar element. */}
       <div className="mb-4">
         {orientation === "days-rows" ? (
           <div
-            className="flex items-center gap-1.5"
+            className="flex items-center justify-center gap-1.5"
             aria-hidden="true"
             data-testid="editor-legend-strip"
           >

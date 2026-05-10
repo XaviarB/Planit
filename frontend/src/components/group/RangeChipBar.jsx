@@ -174,20 +174,30 @@ function Chip({ active, onClick, children, testId }) {
       onClick={onClick}
       data-testid={testId}
       data-active={active ? "true" : "false"}
-      className="text-xs sm:text-sm font-bold rounded-full px-3 py-1.5 border-2 transition"
+      className={`text-xs sm:text-sm rounded-full border-2 transition inline-flex items-center gap-1.5 ${
+        active ? "px-3 py-1.5 scale-[1.04]" : "px-3 py-1.5 hover:bg-[var(--pastel-mint)]/40"
+      }`}
       style={{
-        // Active chips use the pastel-mint pill look (matches `neo-btn.pastel`)
-        // instead of the harsh dark-ink + white combo, which became illegible
-        // in dark mode (light ink + white text). Pastel + dark text reads well
-        // in both themes and feels on-brand.
+        // Active: pastel-mint pill with a deeper offset shadow + a tiny dot
+        // indicator so the selected option reads instantly at a glance, even
+        // when several chips share the same row.
+        // Inactive: muted card bg + soft ink so the chosen chip pops against
+        // its neighbours.
         background: active ? "var(--pastel-mint)" : "var(--card)",
-        color: "var(--ink)",
+        color: active ? "var(--ink)" : "var(--ink-soft)",
         borderColor: "var(--ink)",
-        boxShadow: active ? "2px 2px 0 0 var(--ink)" : "none",
-        fontWeight: active ? 800 : 700,
+        boxShadow: active ? "3px 3px 0 0 var(--ink)" : "none",
+        fontWeight: active ? 800 : 600,
       }}
     >
-      {children}
+      {active && (
+        <span
+          aria-hidden="true"
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ background: "var(--ink)" }}
+        />
+      )}
+      <span>{children}</span>
     </button>
   );
 }

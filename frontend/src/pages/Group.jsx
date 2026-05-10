@@ -1137,6 +1137,7 @@ export default function GroupPage() {
                   heatColors={undefined}
                   focusMode={focusedMembers.length > 0}
                   compareCount={focusedMembers.length}
+                  orientation="days-rows"
                 />
               )}
 

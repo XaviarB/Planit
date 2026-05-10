@@ -15,6 +15,11 @@ The user iteratively requests UI/UX improvements to a no-account group availabil
 - Drawers anchored to the FAB orb: AstralDrawer (remix/history), MyToolsDrawer (busy/toolkit)
 
 ## Implementation log
+- **Feb 2026** — Mobile heatmap transposed (days-rows orientation):
+  - `HeatmapGrid.jsx` — new `orientation` prop ("hours-rows" default | "days-rows"). Days-rows mode swaps axes so each day is a horizontal lane and hours scroll left-to-right. Compact hour labels show every 3rd hour (`12a · 3a · 6a · 9a · 12p · 3p · 6p · 9p`) so 24 cells fit on a phone. Tooltips repositioned with the new tip-anchor logic.
+  - `Group.jsx` (mobile branch) — passes `orientation="days-rows"` to the heatmap. Desktop layout unchanged (still hours-rows / days-cols).
+  - Smoke-tested at 390×844: 7 day rows, 24 hour cells, orientation attr verified.
+
 - **Feb 2026** — Mobile dashboard refinement (settings tab + astral consolidation):
   - `BottomTabBar.jsx` — renamed slot 5 from **"More"** (MoreHorizontal icon) → **"Settings"** (gear icon, `Settings` from lucide-react). Tab key changed `more` → `settings`.
   - `AstralHub.jsx` — removed the **"I'm busy…"** tile (functionality already lives in the bottom-tab "Schedule" edit flow + Toolkit drawer, no need to duplicate). Restored **"Suggest a time"** tile in its place — calls `onSuggestMeeting` to open the Top Free Times modal directly from Astral. Hub now shows: Suggest a time / Remix / Toolkit.

@@ -94,32 +94,34 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen grain" data-testid="landing-page">
-      {/* Top nav — elevated to match Group dashboard: bigger pill nav + larger theme toggle. */}
-      <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-3 planet-logo-wrap" data-testid="brand-logo">
-          <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl border-[3px] border-slate-900 bg-[var(--pastel-mint)] grid place-items-center overflow-visible shadow-[5px_5px_0_0_var(--ink)]">
+      {/* Top nav — tightened to feel like a mobile app header on phones,
+          stays full-width with the brand pill nav on tablets and up. */}
+      <nav className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 py-4 sm:py-6">
+        <div className="flex items-center gap-2 sm:gap-3 planet-logo-wrap" data-testid="brand-logo">
+          <div className="w-12 h-12 sm:w-[72px] sm:h-[72px] rounded-2xl border-[3px] border-slate-900 bg-[var(--pastel-mint)] grid place-items-center overflow-visible shadow-[3px_3px_0_0_var(--stroke)] sm:shadow-[5px_5px_0_0_var(--stroke)]">
             <PlanetIcon />
           </div>
-          <span className="font-heading font-black text-3xl sm:text-4xl tracking-tight">Planit</span>
+          <span className="font-heading font-black text-2xl sm:text-4xl tracking-tight">Planit</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="relative" ref={howRef}>
             <button
               type="button"
               onClick={() => setHowOpen((v) => !v)}
-              className="hidden sm:flex items-center gap-2 px-5 py-3 rounded-full border-2 border-slate-900 bg-white hover:bg-[var(--pastel-mint)] font-heading font-bold text-sm uppercase tracking-[0.12em] transition"
-              style={{ boxShadow: "3px 3px 0 0 var(--ink)" }}
+              className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-3 rounded-full border-2 border-slate-900 bg-white hover:bg-[var(--pastel-mint)] font-heading font-bold text-[11px] sm:text-sm uppercase tracking-[0.12em] transition"
+              style={{ boxShadow: "3px 3px 0 0 var(--stroke)" }}
               data-testid="landing-how-link"
               aria-expanded={howOpen}
             >
-              How it works
+              <span className="hidden xs:inline sm:inline">How it works</span>
+              <span className="xs:hidden sm:hidden">How</span>
               <ChevronDown
-                className={`w-4 h-4 transition-transform ${howOpen ? "rotate-180" : ""}`}
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform ${howOpen ? "rotate-180" : ""}`}
               />
             </button>
             {howOpen && (
               <div
-                className="absolute right-0 mt-2 w-80 sm:w-96 z-30 neo-card p-4 space-y-3"
+                className="absolute right-0 mt-2 w-[18rem] sm:w-96 max-w-[calc(100vw-2rem)] z-30 neo-card p-4 space-y-3"
                 data-testid="how-it-works-dropdown"
               >
                 {STEPS.map((s) => (
@@ -136,33 +138,33 @@ export default function Landing() {
               </div>
             )}
           </div>
-          <ThemeToggle className="w-12 h-12 shadow-[3px_3px_0_0_var(--ink)]" />
+          <ThemeToggle className="w-10 h-10 sm:w-12 sm:h-12 shadow-[3px_3px_0_0_var(--stroke)]" />
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-6 pb-10 grid lg:grid-cols-12 gap-8 items-start">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-2 sm:pt-6 pb-10 grid lg:grid-cols-12 gap-6 sm:gap-8 items-start">
         <div className="lg:col-span-7 pop-in">
           <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--pastel-yellow)] border-2 border-slate-900 mb-6"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--pastel-yellow)] border-2 border-slate-900 mb-5 sm:mb-6"
             data-testid="landing-badge"
           >
             <Sparkles className="w-4 h-4" />
             <span className="label-caps">No account needed</span>
           </div>
-          <h1 className="font-heading font-black text-5xl sm:text-6xl lg:text-7xl leading-[0.95] tracking-tighter">
+          <h1 className="font-heading font-black text-4xl sm:text-6xl lg:text-7xl leading-[0.95] tracking-tighter">
             Time your{" "}
-            <span className="font-orbit bg-[var(--pastel-mint)] px-3 rounded-xl border-2 border-slate-900 inline-block text-4xl sm:text-5xl lg:text-6xl align-middle">
+            <span className="font-orbit bg-[var(--pastel-mint)] px-3 rounded-xl border-2 border-slate-900 inline-block text-3xl sm:text-5xl lg:text-6xl align-middle">
               Space
             </span>
           </h1>
-          <p className="mt-6 text-lg text-slate-700 max-w-xl leading-relaxed">
+          <p className="mt-4 sm:mt-6 text-base sm:text-lg text-slate-700 max-w-xl leading-relaxed">
             Drop in your schedule, share a link with your crew, and see every
             hour where everyone's free to launch into the next adventure.
           </p>
 
-          {/* Dual CTA */}
-          <div className="mt-10 grid md:grid-cols-2 gap-6">
+          {/* Dual CTA — stacks on phones, side-by-side from md+. */}
+          <div className="mt-6 sm:mt-10 grid md:grid-cols-2 gap-4 sm:gap-6">
             {/* Create */}
             <form onSubmit={onCreate} className="neo-card p-6" data-testid="create-group-form">
               <div className="label-caps mb-3 flex items-center gap-2">

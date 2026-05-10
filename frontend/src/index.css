@@ -30,25 +30,51 @@
     --heat-all: #dcfce7;
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Stroke / shadow tokens — separate from text color.
+   --stroke is what borders + drop shadows use; --ink is text/foreground.
+   Light: dark ink stroke (4px hard offset); Dark: lavender thin glow.
+   ────────────────────────────────────────────────────────────── */
+:root {
+    --stroke: #0f172a;
+    --stroke-shadow: 4px 4px 0 0 #0f172a;
+    --stroke-shadow-sm: 2px 2px 0 0 #0f172a;
+    --stroke-width: 2px;
+    --neon-grad-from: #a78bfa;
+    --neon-grad-mid: #818cf8;
+    --neon-grad-to: #38bdf8;
+    /* In light mode "gradient text" collapses to plain ink so headlines
+       still read clean and bold — the neon flow is dark-mode flavor. */
+    --gradient-text: var(--stroke);
+}
+
 html.dark {
-    --bg-base: #0f1620;
-    --card: #1a2332;
-    --card-soft: #232f42;
+    --bg-base: #0a0e1a;
+    --card: #161a2e;
+    --card-soft: #1a1f36;
     --ink: #f1f5f9;
     --ink-soft: #cbd5e1;
     --ink-mute: #94a3b8;
-    --btn-fg: #0f1620;
-    --pastel-mint: #1e3a32;
-    --pastel-yellow: #3d3520;
-    --pastel-lavender: #2e1f3d;
-    --pastel-peach: #3a2620;
-    --pastel-blush: #3a2030;
-    /* Neon blue gradient (nobody → everyone free) */
-    --heat-0: #020617;
-    --heat-1: #1e40af;
-    --heat-2: #0ea5e9;
-    --heat-3: #22d3ee;
-    --heat-all: #cffafe;
+    --btn-fg: #ffffff;
+    /* Neon-tinted card "pastel" tile backgrounds — keep the Style A
+       coloured-tile language but flip warm pastels to lavender-blue glow. */
+    --pastel-mint: linear-gradient(135deg, rgba(56, 189, 248, .18), rgba(167, 139, 250, .18));
+    --pastel-yellow: linear-gradient(135deg, rgba(167, 139, 250, .22), rgba(56, 189, 248, .22));
+    --pastel-lavender: linear-gradient(135deg, rgba(167, 139, 250, .28), rgba(129, 140, 248, .22));
+    --pastel-peach: linear-gradient(135deg, rgba(129, 140, 248, .22), rgba(56, 189, 248, .18));
+    --pastel-blush: linear-gradient(135deg, rgba(167, 139, 250, .22), rgba(125, 211, 252, .2));
+    /* Borders go thin (1px) and glow lavender; shadow is a lavender-blue halo. */
+    --stroke: #c4b5fd;
+    --stroke-shadow: 4px 4px 0 0 rgba(167, 139, 250, .9), 0 0 28px rgba(168, 85, 247, .35);
+    --stroke-shadow-sm: 2px 2px 0 0 rgba(167, 139, 250, .85);
+    --stroke-width: 1px;
+    --gradient-text: linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #38bdf8 100%);
+    /* Neon lavender → sky-blue gradient for heatmap (nobody → everyone free). */
+    --heat-0: #0c0f1f;
+    --heat-1: #4338ca;
+    --heat-2: #818cf8;
+    --heat-3: #a78bfa;
+    --heat-all: #38bdf8;
 }
 
 html,
@@ -131,7 +157,7 @@ body {
     transform-box: view-box;
 }
 .ring-spin circle {
-    fill: #0f172a;
+    fill: var(--stroke);
 }
 /* Globe sits centered. The Y-axis rotation is class-driven (.is-spinning) so
    we can let the current 4s revolution complete cleanly even after mouse
@@ -236,9 +262,9 @@ svg:has(.planet-globe.is-spinning) .planet-stars circle {
 .neo-card {
     background: var(--card);
     color: var(--ink);
-    border: 2px solid var(--ink);
+    border: var(--stroke-width) solid var(--stroke);
     border-radius: 14px;
-    box-shadow: 4px 4px 0px 0px var(--ink);
+    box-shadow: var(--stroke-shadow);
     transition:
         transform 0.15s ease,
         box-shadow 0.15s ease,
@@ -246,29 +272,32 @@ svg:has(.planet-globe.is-spinning) .planet-stars circle {
 }
 .neo-card:hover {
     transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0px 0px var(--ink);
+    box-shadow: 6px 6px 0px 0px var(--stroke);
+}
+html.dark .neo-card:hover {
+    box-shadow: 6px 6px 0 0 rgba(167, 139, 250, .95), 0 0 36px rgba(168, 85, 247, .45);
 }
 
 .neo-btn {
     background: var(--ink);
     color: var(--btn-fg);
-    border: 2px solid var(--ink);
+    border: var(--stroke-width) solid var(--stroke);
     border-radius: 999px;
     padding: 0.75rem 1.5rem;
     font-family: "Outfit", sans-serif;
     font-weight: 700;
     letter-spacing: 0.02em;
-    box-shadow: 3px 3px 0px 0px var(--ink);
+    box-shadow: 3px 3px 0px 0px var(--stroke);
     transition: all 0.12s ease;
     cursor: pointer;
 }
 .neo-btn:hover {
     transform: translate(-2px, -2px);
-    box-shadow: 5px 5px 0px 0px var(--ink);
+    box-shadow: 5px 5px 0px 0px var(--stroke);
 }
 .neo-btn:active {
     transform: translate(0, 0);
-    box-shadow: 1px 1px 0px 0px var(--ink);
+    box-shadow: 1px 1px 0px 0px var(--stroke);
 }
 .neo-btn.ghost {
     background: var(--card);
@@ -278,11 +307,21 @@ svg:has(.planet-globe.is-spinning) .planet-stars circle {
     background: var(--pastel-mint);
     color: var(--ink);
 }
+/* Dark-mode neon: solid (non-ghost) buttons take a lavender→blue gradient fill. */
+html.dark .neo-btn:not(.ghost):not(.pastel) {
+    background: linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #38bdf8 100%);
+    color: #ffffff;
+    border-color: rgba(196, 181, 253, .9);
+}
+html.dark .neo-btn.ghost {
+    background: var(--card);
+    color: var(--ink);
+}
 
 .neo-input {
     background: var(--card);
     color: var(--ink);
-    border: 2px solid var(--ink);
+    border: var(--stroke-width) solid var(--stroke);
     border-radius: 10px;
     padding: 0.6rem 0.9rem;
     font-family: "Work Sans", sans-serif;
@@ -290,7 +329,7 @@ svg:has(.planet-globe.is-spinning) .planet-stars circle {
     font-size: 0.95rem;
 }
 .neo-input:focus {
-    box-shadow: 3px 3px 0px 0px var(--ink);
+    box-shadow: 3px 3px 0px 0px var(--stroke);
 }
 .neo-input::placeholder {
     color: var(--ink-mute);
@@ -319,8 +358,11 @@ html.dark .neo-input::-webkit-calendar-picker-indicator {
 }
 .heat-cell:hover {
     transform: scale(1.08);
-    border: 1px solid var(--ink);
+    border: 1px solid var(--stroke);
     z-index: 2;
+}
+html.dark .heat-cell {
+    border-color: rgba(196, 181, 253, 0.18);
 }
 
 /* Subtle grain */
@@ -353,7 +395,8 @@ html.dark .bg-white {
     background-color: var(--card) !important;
 }
 html.dark .border-slate-900 {
-    border-color: var(--ink) !important;
+    border-color: var(--stroke) !important;
+    border-width: var(--stroke-width) !important;
 }
 html.dark .text-slate-900 {
     color: var(--ink) !important;
@@ -367,11 +410,111 @@ html.dark .text-slate-500 {
     color: var(--ink-mute) !important;
 }
 html.dark .bg-slate-900 {
-    background-color: var(--ink) !important;
-    color: var(--btn-fg) !important;
+    background: linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #38bdf8 100%) !important;
+    color: #ffffff !important;
+    border-color: rgba(196, 181, 253, .9) !important;
 }
 html.dark .bg-slate-900\/50 {
     background-color: rgba(0, 0, 0, 0.65) !important;
+}
+/* Ambient body glow — cinematic lavender + sky-blue radial bloom only in dark. */
+html.dark body {
+    background-image:
+        radial-gradient(ellipse 60% 40% at 12% 8%, rgba(167, 139, 250, .22), transparent 60%),
+        radial-gradient(ellipse 55% 45% at 92% 26%, rgba(56, 189, 248, .18), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 50% 110%, rgba(129, 140, 248, .18), transparent 60%);
+    background-attachment: fixed;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Gradient text (dark-mode neon accents).
+   Light mode renders solid ink; dark mode flows lavender → blue.
+   ────────────────────────────────────────────────────────────── */
+.gradient-text {
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+html:not(.dark) .gradient-text {
+    /* Light mode: just inherit ink color (no clip flash). */
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--ink);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Mobile App Shell
+   The app feels like a native mobile app: full width on phones,
+   centered phone-frame max-w on desktop with backdrop ambient glow.
+   ────────────────────────────────────────────────────────────── */
+.app-shell {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    position: relative;
+    background: var(--bg-base);
+    /* Soft "phone frame" inset on desktop only. */
+}
+@media (min-width: 768px) {
+    .app-shell {
+        margin-top: 24px;
+        margin-bottom: 24px;
+        min-height: calc(100vh - 48px);
+        min-height: calc(100dvh - 48px);
+        border-radius: 36px;
+        overflow: hidden;
+        border: var(--stroke-width) solid var(--stroke);
+        box-shadow: var(--stroke-shadow), 0 30px 80px rgba(15, 23, 42, .15);
+    }
+    html.dark .app-shell {
+        box-shadow:
+            4px 4px 0 0 rgba(167, 139, 250, .9),
+            0 0 60px rgba(168, 85, 247, .35),
+            0 30px 90px rgba(0, 0, 0, .55);
+    }
+    /* Backdrop wallpaper outside the phone frame on desktop. */
+    body {
+        background: var(--bg-base);
+    }
+    html.dark body {
+        background-color: #050714;
+    }
+}
+
+/* Bottom-tab safe-area padding helper (avoids content hiding under tab bar). */
+.with-tabbar-pad {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Sticky mobile app bar (top). */
+.mobile-appbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    border-bottom: var(--stroke-width) solid color-mix(in srgb, var(--stroke) 60%, transparent);
+}
+
+/* Bottom tab bar surface — sticky, glassy, hosts the 4 tabs + center astral */
+.mobile-tabbar {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+    width: calc(100% - 24px);
+    max-width: 460px;
+}
+@media (min-width: 768px) {
+    .mobile-tabbar {
+        max-width: 432px;
+    }
 }
 
 @keyframes pop-in {
@@ -392,6 +535,67 @@ html.dark .bg-slate-900\/50 {
 .scroll-x {
     overflow-x: auto;
     scrollbar-width: thin;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Dark-mode avatar re-tint into the lavender → blue spectrum.
+   Keeps each member's "color" identifiable but pulls the whole
+   palette into the cohesive neon range.
+   ────────────────────────────────────────────────────────────── */
+html.dark [data-avatar-tint] {
+    /* The original color is provided via the `style.background` prop;
+       we layer a subtle lavender→blue gradient over it via mix-blend. */
+    background-blend-mode: screen, normal;
+    box-shadow: 0 0 12px rgba(167, 139, 250, .35);
+}
+html.dark [data-avatar-tint]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(167, 139, 250, .55), rgba(56, 189, 248, .45));
+    mix-blend-mode: hue;
+    pointer-events: none;
+}
+
+/* Astral mascot pulse-ring (used by the bottom-tab center button). */
+@keyframes astral-pulse {
+    0%   { transform: translate(-50%, -50%) scale(1);   opacity: .55; }
+    80%  { transform: translate(-50%, -50%) scale(1.55); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1.55); opacity: 0; }
+}
+.astral-pulse-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    border: 2px solid rgba(167, 139, 250, .45);
+    animation: astral-pulse 2.6s ease-out infinite;
+    pointer-events: none;
+}
+html:not(.dark) .astral-pulse-ring {
+    border-color: rgba(15, 23, 42, .35);
+}
+
+/* Astral mascot orb — palette swaps per theme:
+   Light: emerald → mint (matches Style A mockup).
+   Dark : lavender → indigo → sky-blue (matches hybrid neon mockup). */
+.astral-orb-mascot {
+    background: linear-gradient(135deg, #a7f3d0 0%, #86efac 60%, #34d399 100%);
+    box-shadow: 0 10px 22px rgba(16, 185, 129, .40), 0 0 0 4px var(--card);
+}
+:root  { --astral-eye: #0f172a; }
+html.dark {
+    --astral-eye: #4f46e5;
+}
+html.dark .astral-orb-mascot {
+    background: linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #38bdf8 100%);
+    box-shadow:
+        0 12px 28px rgba(167, 139, 250, .55),
+        0 0 30px rgba(56, 189, 248, .35),
+        0 0 0 4px var(--card);
 }
 
 /* Horizontal share-targets scroller — pill snap, hide chunky scrollbar. */
@@ -461,8 +665,8 @@ html.dark .bg-slate-900\/50 {
 .astral-panel {
     background: var(--card);
     color: var(--ink);
-    border-left: 2px solid var(--ink);
-    box-shadow: -8px 0 0 0 var(--ink);
+    border-left: var(--stroke-width) solid var(--stroke);
+    box-shadow: -8px 0 0 0 var(--stroke);
     animation: astral-slide-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes astral-slide-in {
@@ -507,7 +711,7 @@ html.dark .astral-avatar {
 }
 
 .astral-quote-block {
-    border-left: 4px solid var(--ink);
+    border-left: 4px solid var(--stroke);
     padding-left: 14px;
 }
 
@@ -519,26 +723,26 @@ html.dark .astral-avatar {
 }
 .astral-card:hover {
     transform: translate(-1px, -1px);
-    box-shadow: 6px 6px 0 0 var(--ink);
+    box-shadow: 6px 6px 0 0 var(--stroke);
 }
 
 /* ----- Buzz pull-quote (the centerpiece) ----- */
 .astral-buzz {
     position: relative;
     background: var(--pastel-yellow);
-    border: 2px solid var(--ink);
+    border: var(--stroke-width) solid var(--stroke);
     border-radius: 14px;
     padding: 18px 18px 14px 46px;
-    box-shadow: 4px 4px 0 0 var(--ink);
+    box-shadow: var(--stroke-shadow);
 }
 html.dark .astral-buzz {
-    background: var(--pastel-yellow);
+    background: linear-gradient(135deg, rgba(167, 139, 250, .22), rgba(56, 189, 248, .22));
 }
 .astral-buzz-mark {
     position: absolute;
     top: 12px;
     left: 12px;
-    color: var(--ink);
+    color: var(--stroke);
     opacity: 0.85;
 }
 .astral-buzz-quote {
@@ -564,14 +768,14 @@ html.dark .astral-buzz {
     color: #fff;
     padding: 2px 8px;
     border-radius: 999px;
-    border: 2px solid var(--ink);
+    border: var(--stroke-width) solid var(--stroke);
     font-size: 0.55rem;
     letter-spacing: 0.1em;
 }
 
 /* Astral's prose take — sits in a quiet rail. */
 .astral-take {
-    border-left: 3px solid var(--ink);
+    border-left: 3px solid var(--stroke);
     padding: 6px 0 6px 12px;
     color: var(--ink-soft);
     font-size: 0.95rem;
@@ -585,9 +789,9 @@ html.dark .astral-buzz {
     gap: 8px;
     padding: 10px 16px;
     font-weight: 800;
-    border: 2px solid var(--ink);
+    border: var(--stroke-width) solid var(--stroke);
     border-radius: 999px;
-    box-shadow: 4px 4px 0 0 var(--ink);
+    box-shadow: var(--stroke-shadow);
     background: linear-gradient(
         100deg,
         var(--pastel-lavender) 0%,
@@ -601,11 +805,11 @@ html.dark .astral-buzz {
 }
 .astral-trigger:hover {
     transform: translate(-1px, -1px);
-    box-shadow: 6px 6px 0 0 var(--ink);
+    box-shadow: 6px 6px 0 0 var(--stroke);
 }
 .astral-trigger:active {
     transform: translate(2px, 2px);
-    box-shadow: 1px 1px 0 0 var(--ink);
+    box-shadow: 1px 1px 0 0 var(--stroke);
 }
 .astral-trigger .astral-spark {
     width: 16px;
@@ -629,14 +833,14 @@ html.dark .astral-buzz {
 .fab-speech {
   position: absolute;
   background: var(--card, #ffffff);
-  border: 2px solid var(--ink, #0f172a);
+  border: var(--stroke-width, 2px) solid var(--stroke, #0f172a);
   border-radius: 14px;
   padding: 10px 12px;
   font-size: 12px;
   line-height: 1.3;
   font-weight: 600;
   white-space: normal;
-  box-shadow: 4px 4px 0 0 var(--ink, #0f172a);
+  box-shadow: var(--stroke-shadow, 4px 4px 0 0 #0f172a);
   animation: fab-bubble-pop 360ms cubic-bezier(.2,.8,.2,1) both;
   z-index: 1;
   text-align: left;
@@ -647,8 +851,8 @@ html.dark .astral-buzz {
   width: 12px;
   height: 12px;
   background: var(--card, #ffffff);
-  border-right: 2px solid var(--ink, #0f172a);
-  border-bottom: 2px solid var(--ink, #0f172a);
+  border-right: var(--stroke-width, 2px) solid var(--stroke, #0f172a);
+  border-bottom: var(--stroke-width, 2px) solid var(--stroke, #0f172a);
 }
 .fab-speech.fab-speech--left::after {
   right: -7px;
@@ -689,7 +893,7 @@ html.dark .astral-buzz {
 
 /* ─── Hub tile hover lift ───────────────────────────────────── */
 .hub-tile:hover {
-  box-shadow: 5px 5px 0 0 var(--ink) !important;
+  box-shadow: 5px 5px 0 0 var(--stroke) !important;
 }
 
 /* ─── Hub keyboard hint pill ───────────────────────────────── */

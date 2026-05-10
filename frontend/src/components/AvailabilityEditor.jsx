@@ -2,7 +2,7 @@ import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState
 import { buildTimeSlots, timeLabel } from "../lib/schedule";
 import { updateSlots, addReason, deleteReason, astralParseBusy } from "../lib/api";
 import { toast } from "sonner";
-import { Settings, Plus, X, ChevronDown, Repeat, Sparkles, Loader2, Palette, Type } from "lucide-react";
+import { Plus, X, ChevronDown, Repeat, Sparkles, Loader2, Palette, Type } from "lucide-react";
 import HeatmapLegendStrip from "./HeatmapLegendStrip";
 
 // ── Personal editor "skin" — per-user theme & font for THIS user's editing
@@ -321,7 +321,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
 
   return (
     <div className="neo-card p-4 sm:p-6" data-testid="availability-editor">
-      {/* Toolbar — Precision · Clear view · Customize labels all on a single row.
+      {/* Toolbar — Precision · Clear view · Recurring busy all on a single row.
           Precision sits flush-left, the two action buttons hug the right. On narrow
           viewports it wraps gracefully but the desktop default is one continuous row. */}
       <div className="flex flex-wrap items-center gap-3 mb-4" data-testid="editor-toolbar">
@@ -358,26 +358,27 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
         </button>
         <button
           type="button"
-          onClick={() => setCustomizeOpen((v) => !v)}
+          onClick={() => setRecurringPanelOpen((v) => !v)}
           className="neo-btn ghost text-sm flex items-center gap-1.5"
-          data-testid="customize-labels-btn"
+          data-testid="recurring-busy-toggle-btn"
         >
-          <Settings className="w-3.5 h-3.5" />
-          Customize labels
+          <Repeat className="w-3.5 h-3.5" />
+          Recurring busy
           <ChevronDown
             className={`w-3.5 h-3.5 transition-transform ${
-              customizeOpen ? "rotate-180" : ""
+              recurringPanelOpen ? "rotate-180" : ""
             }`}
           />
         </button>
       </div>
 
-      {/* Secondary toolbar row — "Why are you busy?" label + reason chips on the
-          left, "Recurring busy" toggle on the right. Both share the same line. */}
+      {/* Secondary toolbar row — "Why are you busy?" label + reason chips.
+          A trailing "+" chip after the last reason (e.g. Sleep) opens the
+          Customize labels panel inline. */}
       <div className="flex items-start gap-3 mb-3 flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="label-caps mb-2">Why are you busy?</div>
-          <div className="flex flex-wrap gap-2" data-testid="reason-picker">
+          <div className="flex flex-wrap gap-2 items-center" data-testid="reason-picker">
             <ReasonChip
               selected={activeReason === null}
               onClick={() => setActiveReason(null)}
@@ -396,23 +397,22 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
                 testId={`reason-chip-${r.id}`}
               />
             ))}
+            {/* Add-reason "+" chip — opens the Customize labels panel.
+                Matches the visual weight of the reason chips next to it. */}
+            <button
+              type="button"
+              onClick={() => setCustomizeOpen((v) => !v)}
+              aria-label="Customize labels"
+              title="Customize labels"
+              className={`w-8 h-8 rounded-full border-2 border-slate-900 flex items-center justify-center transition shadow-[2px_2px_0_0_rgba(15,23,42,1)] hover:translate-y-[-1px] active:translate-y-0 active:shadow-none ${
+                customizeOpen ? "bg-slate-900 text-white" : "bg-white hover:bg-[var(--pastel-mint)] text-slate-900"
+              }`}
+              data-testid="customize-labels-btn"
+            >
+              <Plus className="w-4 h-4" strokeWidth={3} />
+            </button>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setRecurringPanelOpen((v) => !v)}
-          className="neo-btn ghost text-sm flex items-center gap-1.5 shrink-0 mt-[22px]"
-          data-testid="recurring-busy-toggle-btn"
-        >
-          <Repeat className="w-3.5 h-3.5" />
-          Recurring busy
-          <ChevronDown
-            className={`w-3.5 h-3.5 transition-transform ${
-              recurringPanelOpen ? "rotate-180" : ""
-            }`}
-          />
-        </button>
       </div>
 
       {/* Reason helper text + customize labels panel.

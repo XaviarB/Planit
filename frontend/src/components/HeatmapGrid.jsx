@@ -1,6 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
 import { buildTimeSlots, timeLabel, heatColor, withSlotMap, memberStatusAt, dateToDayIdx } from "../lib/schedule";
-import HeatmapLegendStrip from "./HeatmapLegendStrip";
 
 /**
  * HeatmapGrid — group availability heatmap.
@@ -215,25 +214,39 @@ export default function HeatmapGrid({
 
   return (
     <div className="neo-card p-4 sm:p-6" data-testid="heatmap" data-orientation={orientation}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="label-caps">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="label-caps shrink-0">
           {compareCount >= 2
             ? `Comparison view · ${compareCount} members`
             : focusMode
             ? "Member schedule"
             : "Group availability heatmap"}
         </div>
-        {!transposed && (
+        {transposed ? (
+          /* Mobile: 5-cell gradient inline with the heading — only thing
+             above the heatmap, no separate legend card. */
+          <div
+            className="flex items-center gap-1 shrink-0"
+            aria-hidden="true"
+            data-testid="heatmap-legend-strip"
+          >
+            {["var(--heat-all)", "var(--heat-3)", "var(--heat-2)", "var(--heat-1)", "var(--heat-0)"].map(
+              (stop, i) => (
+                <span
+                  key={i}
+                  data-testid={`legend-strip-${i}`}
+                  className="w-5 h-5 rounded-md border-2 shrink-0"
+                  style={{ borderColor: "var(--ink)", background: stop }}
+                />
+              )
+            )}
+          </div>
+        ) : (
           <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
             Hover a cell for details
           </div>
         )}
       </div>
-
-      {/* Mobile-only: 5-box gradient legend replaces the stacked legend
-          card + tap hint, giving the whole "what do these colors mean"
-          context at a glance directly above the grid. */}
-      {transposed && <HeatmapLegendStrip className="mb-4" />}
 
       {transposed ? (
         // ── Transposed: days on rows, hours on columns ──────────────────

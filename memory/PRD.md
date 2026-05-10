@@ -15,6 +15,11 @@ The user iteratively requests UI/UX improvements to a no-account group availabil
 - Drawers anchored to the FAB orb: AstralDrawer (remix/history), MyToolsDrawer (busy/toolkit)
 
 ## Implementation log
+- **Feb 2026** — Mobile dashboard refinement (settings tab + astral consolidation):
+  - `BottomTabBar.jsx` — renamed slot 5 from **"More"** (MoreHorizontal icon) → **"Settings"** (gear icon, `Settings` from lucide-react). Tab key changed `more` → `settings`.
+  - `AstralHub.jsx` — removed the **"I'm busy…"** tile (functionality already lives in the bottom-tab "Schedule" edit flow + Toolkit drawer, no need to duplicate). Restored **"Suggest a time"** tile in its place — calls `onSuggestMeeting` to open the Top Free Times modal directly from Astral. Hub now shows: Suggest a time / Remix / Toolkit.
+  - `Group.jsx` (mobile branch) — removed the duplicated "Suggest a meeting" CTA from the Settings tab (the Astral tile is the single entry point now). Renamed all `mainTab === "more"` checks → `"settings"`. Added migration so persisted `"more"` and `"hangouts"` localStorage values both flow into `"settings"` on next load.
+
 - **Feb 2026** — Mobile dashboard restructure (Hangouts → My Schedule, Astral full-screen):
   - `BottomTabBar.jsx` — replaced "Hangouts" slot with "Schedule" (Edit3 icon). Action-style tab: tapping it calls `onMyScheduleClick` (toggles edit mode on Plan tab) instead of switching nav. Active visual driven by `editMode` prop.
   - `Group.jsx` (mobile branch) — removed inline "Make my schedule" button above Quick Stats on Plan tab; only "Done editing" CTA shown while editing. Removed `mainTab === "hangouts"` block; HangoutsList + Suggest-a-meeting button relocated to **More** tab. Stale `mainTab === "hangouts"` localStorage values migrate to `"more"`.

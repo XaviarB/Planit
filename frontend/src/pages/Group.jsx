@@ -86,11 +86,15 @@ export default function GroupPage() {
 
   // Initial view state hydrated from localStorage (per-group).
   const persisted = getGroupViewState(code) || {};
-  // mainTab = which mobile bottom-tab is active (plan / crew / more)
-  // Migrate stale "hangouts" persisted value (the tab was merged into More).
-  const [mainTab, setMainTab] = useState(
-    persisted.mainTab === "hangouts" ? "more" : (persisted.mainTab || "plan")
-  );
+  // mainTab = which mobile bottom-tab is active (plan / crew / settings)
+  // Migrate stale persisted values:
+  //   - "hangouts" → "settings" (tab merged into Settings)
+  //   - "more"     → "settings" (tab renamed)
+  const [mainTab, setMainTab] = useState(() => {
+    const v = persisted.mainTab;
+    if (v === "hangouts" || v === "more") return "settings";
+    return v || "plan";
+  });
   const [tab, setTab] = useState(persisted.tab || "dates"); // dates | members (sub-tab inside Plan)
   const [editMode, setEditMode] = useState(false);
   const [astralOpen, setAstralOpen] = useState(false); // controls AstralHub on mobile
@@ -1218,19 +1222,10 @@ export default function GroupPage() {
               slot is now "My Schedule"). The hangouts list + Suggest a meeting
               button live in the More tab below. */}
 
-          {/* MORE TAB — hangouts list, suggest a meeting, share, group settings, customize */}
-          {mainTab === "more" && (
+          {/* SETTINGS TAB — hangouts list, share, group settings, customize.
+              "Suggest a meeting" lives in the Astral hub now. */}
+          {mainTab === "settings" && (
             <div className="space-y-4">
-              {/* Suggest a meeting — primary CTA, kept here since the Hangouts tab is gone. */}
-              <button
-                className="neo-btn w-full flex items-center justify-center gap-2 py-3.5 text-base"
-                onClick={() => setSuggestOpen(true)}
-                data-testid="suggest-meeting-btn"
-              >
-                <Sparkles className="w-4 h-4" />
-                Suggest a meeting
-              </button>
-
               {/* Locked / tentative hangouts — same component as desktop sidebar. */}
               {!hiddenPanels.has("hangouts") ? (
                 <div className="pop-in" style={{ animationDelay: "0ms" }}>

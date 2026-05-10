@@ -1,11 +1,11 @@
-import { Calendar, Users, Edit3, MoreHorizontal } from "lucide-react";
+import { Calendar, Users, Edit3, Settings as SettingsIcon } from "lucide-react";
 import AstralBot from "./AstralBot";
 
 /**
  * BottomTabBar — the iOS/Android-style mobile tab bar that anchors the
  * Group page experience. Five "slots":
  *
- *   [Plan] [Crew]  ✦Astral✦  [My Schedule] [More]
+ *   [Plan] [Crew]  ✦Astral✦  [My Schedule] [Settings]
  *
  * The center slot is a slightly elevated, rounded mascot orb (AstralBot)
  * with a subtle pulse-ring — tapping it opens the Astral hub.
@@ -27,7 +27,7 @@ const PLAN_TABS = [
 const TRAILING_TABS = [
   // "My Schedule" is action-style: tap → toggle edit mode (handled via onMyScheduleClick).
   { key: "myschedule", label: "Schedule", Icon: Edit3, action: "myschedule" },
-  { key: "more", label: "More", Icon: MoreHorizontal },
+  { key: "settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 export default function BottomTabBar({

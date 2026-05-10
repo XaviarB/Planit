@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Sparkles, X, Send, Shuffle, Clock, Wand2,
+  Sparkles, X, Send, Shuffle, Wand2,
   ArrowRight, ArrowLeft, Loader2, RotateCw, Maximize2,
   Settings, Save,
 } from "lucide-react";
@@ -576,16 +576,17 @@ function MenuBody({
       </div>
 
       {/* Tile column — 1x3 vertical stack.
-          "Suggest a time" was retired in favor of the bottom-tab "My Schedule"
-          flow (where the user marks themselves busy directly on the heatmap). */}
+          "I'm busy…" was retired in favor of the bottom-tab "My Schedule"
+          flow (where the user marks themselves busy directly on the heatmap),
+          so this tile no longer duplicates that surface. */}
       <div className="flex flex-col gap-2">
         {tile({
-          icon: Clock,
-          title: "I'm busy…",
-          hint: "Natural-language → busy slots auto-merged",
+          icon: Sparkles,
+          title: "Suggest a time",
+          hint: "Top free overlaps for the crew, ready to copy & invite",
           accent: "var(--pastel-mint)",
-          testId: "hub-tile-busy",
-          onClick: () => openTools("busy"),
+          testId: "hub-tile-suggest-time",
+          onClick: () => onSuggestMeeting && onSuggestMeeting(),
         })}
         {tile({
           icon: Shuffle,

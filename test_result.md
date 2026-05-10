@@ -672,7 +672,7 @@ frontend:
           - Created test hangout via API (POST /api/groups/N7UVGL/hangouts) ✓
           - HangoutsList visible and expandable ✓
           - Hangout row found with download icon (data-testid="hangout-ics-{id}") ✓
-          - Download icon href: https://modify-pro-3.preview.emergentagent.com/api/groups/N7UVGL/hangouts/{id}/event.ics ✓
+          - Download icon href: https://cohesive-mobile.preview.emergentagent.com/api/groups/N7UVGL/hangouts/{id}/event.ics ✓
           - href ends with '/event.ics' ✓
           - href has correct path structure: /api/groups/{code}/hangouts/{hid}/event.ics ✓
           - Icon is an anchor tag with target="_blank" and rel="noreferrer" ✓

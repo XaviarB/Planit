@@ -26,6 +26,38 @@ import ThemeToggle from "../components/ThemeToggle";
 import BottomTabBar from "../components/BottomTabBar";
 import AstralHub from "../components/AstralHub";
 import SuggestMeeting from "../components/SuggestMeeting";
+import FloatingLauncher from "../components/FloatingLauncher";
+
+/**
+ * useIsDesktop — viewport breakpoint hook.
+ * The Group page renders TWO completely different layouts:
+ *   - desktop (>=1024px): the original 12-col grid + sidebar + FAB launcher
+ *   - mobile  (<1024px) : the new native-app stack with bottom tab bar
+ * We watch matchMedia so the UI re-flows live as the user resizes.
+ * Defaults to `true` server/SSR so first paint on desktop avoids a flash
+ * of the mobile shell.
+ */
+function useIsDesktop(query = "(min-width: 1024px)") {
+  const get = () => {
+    if (typeof window === "undefined" || !window.matchMedia) return true;
+    return window.matchMedia(query).matches;
+  };
+  const [isDesktop, setIsDesktop] = useState(get);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const onChange = (e) => setIsDesktop(e.matches);
+    // Modern browsers
+    if (mq.addEventListener) mq.addEventListener("change", onChange);
+    else mq.addListener(onChange);
+    setIsDesktop(mq.matches);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", onChange);
+      else mq.removeListener(onChange);
+    };
+  }, [query]);
+  return isDesktop;
+}
 
 export default function GroupPage() {
   const { code } = useParams();
@@ -41,8 +73,9 @@ export default function GroupPage() {
   const [mainTab, setMainTab] = useState(persisted.mainTab || "plan");
   const [tab, setTab] = useState(persisted.tab || "dates"); // dates | members (sub-tab inside Plan)
   const [editMode, setEditMode] = useState(false);
-  const [astralOpen, setAstralOpen] = useState(false); // controls AstralHub
-  const [suggestOpen, setSuggestOpen] = useState(false); // controls SuggestMeeting modal
+  const [astralOpen, setAstralOpen] = useState(false); // controls AstralHub on mobile
+  const [suggestOpen, setSuggestOpen] = useState(false); // controls SuggestMeeting modal on mobile
+  const isDesktop = useIsDesktop(); // ≥1024px → render the original horizontal layout
   const [rangeStart, setRangeStart] = useState(persisted.rangeStart || isoToday());
   const [rangeEnd, setRangeEnd] = useState(persisted.rangeEnd || isoPlus(isoToday(), 6));
   const [hourFrom, setHourFrom] = useState(typeof persisted.hourFrom === "number" ? persisted.hourFrom : 0);
@@ -73,7 +106,10 @@ export default function GroupPage() {
 
   // Global keyboard shortcuts — Cmd/Ctrl+K and "/" open Astral from anywhere.
   // Esc closes the hub if open. Ignored while typing in inputs.
+  // Mobile-only: on desktop the FloatingLauncher hosts its own identical handler,
+  // so we register here exclusively when the bottom tab bar is active.
   useEffect(() => {
+    if (isDesktop) return undefined;
     const isTypingTarget = (el) => {
       if (!el) return false;
       const tag = (el.tagName || "").toLowerCase();
@@ -94,7 +130,7 @@ export default function GroupPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [isDesktop]);
 
   // Phase-5: when the group payload arrives, fold its customization into the
   // page state — but ONLY if the user has no per-group persisted preference
@@ -333,6 +369,464 @@ export default function GroupPage() {
       setSavingExit(false);
     }
   };
+
+  if (isDesktop) return (
+    <div
+      className="min-h-screen grain pb-24"
+      data-testid="group-page"
+      style={groupBrandingStyle}
+    >
+      {/* Two-row topbar.
+          Row 1 — group identity on the left, the segmented view-tabs + theme toggle on the right.
+          Row 2 — the four big action buttons stretched edge-to-edge across the page width. */}
+      <header
+        className="max-w-7xl mx-auto px-6 pt-6 pb-3"
+        data-testid="topbar"
+      >
+        {/* Row 1 */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            className="w-10 h-10 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-mint)] shrink-0"
+            onClick={() => {
+              toast.dismiss();
+              nav("/");
+            }}
+            data-testid="back-home-btn"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="shrink-0">
+            <div className="label-caps" style={{ color: "var(--ink-mute)" }}>Group</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {group.branding?.emoji && (
+                <span
+                  className="w-9 h-9 rounded-xl border-2 border-slate-900 grid place-items-center text-xl shrink-0"
+                  style={{
+                    background:
+                      group.branding?.gradient_from || "var(--pastel-mint)",
+                  }}
+                  data-testid="group-emoji-chip"
+                  title="group emoji"
+                >
+                  {group.branding.emoji}
+                </span>
+              )}
+              <GroupMenu
+                group={group}
+                onRenamed={(name) => setGroup((g) => ({ ...g, name }))}
+                onRecurrenceChange={(kind) =>
+                  setGroup((g) => ({ ...g, recurrence_kind: kind }))
+                }
+              />
+              {group.recurrence_kind && group.recurrence_kind !== "none" && (
+                <span
+                  className="px-2 py-0.5 rounded-full border-2 border-slate-900 text-[0.55rem] uppercase tracking-wider font-bold font-heading bg-[var(--pastel-lavender)]"
+                  data-testid="recurrence-badge"
+                  title={`This is a ${group.recurrence_kind} recurring crew.`}
+                >
+                  ↻ {group.recurrence_kind}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Spacer pushes the right cluster to the opposite edge. */}
+          <div className="flex-1 min-w-[16px]" />
+
+          {/* Right cluster — (optional) Editing badge + theme toggle. View-tabs moved to Row 2. */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {editMode && (
+              <span
+                className="px-3 py-2 rounded-full border-2 border-slate-900 text-sm font-bold font-heading bg-slate-900 text-white"
+                data-testid="tab-editing"
+              >
+                Editing
+              </span>
+            )}
+            <ThemeToggle />
+          </div>
+        </div>
+
+        {/* Row 2 (action tabs) was moved into the main column so it spans
+            only the heatmap width, not the entire page (Quick Stats stays
+            uncovered on the left). See the action-row block below. */}
+      </header>
+
+      <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-12 gap-6">
+        {/* Sidebar — order: Quick stats → Hangouts → Members → Heatmap legend → Invite friends.
+            Members lifted above the legend, then "Invite friends" moved all the way to the
+            bottom so the rail terminates with the share/code action.
+            Each card pops in 80ms after the previous one for a premium entrance. */}
+        <aside className="lg:col-span-3 space-y-6">
+          {!hiddenPanels.has("stats") && (
+            <div className="pop-in" style={{ animationDelay: "0ms" }}>
+              <QuickStats
+                members={visibleMembers}
+                columns={heatmapColumns}
+                mode={gridMode}
+                hourFrom={0}
+                hourTo={23}
+                minuteStep={60}
+                meId={memberId}
+              />
+            </div>
+          )}
+
+          {/* Phase 4 — locked / tentative hangouts. Quietly hides itself when
+              the group has nothing on the calendar. */}
+          {!hiddenPanels.has("hangouts") && (
+            <div className="pop-in" style={{ animationDelay: "60ms" }}>
+              <HangoutsList
+                group={group}
+                memberId={memberId}
+                onChanged={(h) =>
+                  setGroup((prev) => (prev ? { ...prev, hangouts: h } : prev))
+                }
+              />
+            </div>
+          )}
+
+          <div className="pop-in" style={{ animationDelay: "120ms" }} data-testid="members-card-wrap">
+            <div className="neo-card p-5" data-testid="members-card">
+              <div className="label-caps mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4" /> Members ({group.members.length})
+              </div>
+              <ul className="space-y-2">
+                {group.members.map((m) => (
+                  <MemberRow
+                    key={m.id}
+                    m={m}
+                    isMe={m.id === memberId}
+                    code={code}
+                    isFocused={focusMemberIds.includes(m.id)}
+                    liveStatus={liveStatus[m.id]}
+                    reasonMap={reasonMap}
+                    onToggleFocus={() => toggleFocus(m.id)}
+                    onRenamed={(name) =>
+                      setGroup((g) => ({
+                        ...g,
+                        members: g.members.map((x) => (x.id === m.id ? { ...x, name } : x)),
+                      }))
+                    }
+                  />
+                ))}
+              </ul>
+              {focusMemberIds.length > 0 && (
+                <button
+                  onClick={() => setFocusMemberIds([])}
+                  className="mt-3 w-full text-xs neo-btn ghost py-2"
+                  data-testid="focus-clear-btn"
+                >
+                  Show all members
+                </button>
+              )}
+              {focusMemberIds.length === 1 && group.members.length > 1 && (
+                <p className="mt-2 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+                  Tap another member's bubble to compare.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="pop-in" style={{ animationDelay: "180ms" }}>
+            <LegendEditor />
+          </div>
+
+          {/* Invite friends — anchored at the bottom of the sidebar so the rail
+              terminates with a clear "share this group" action. The relative
+              z-index keeps the ShareMenu popover above heatmap cells. */}
+          {!hiddenPanels.has("share") && (
+            <div className="neo-card p-4 pop-in relative z-30" style={{ animationDelay: "240ms" }} data-testid="share-card">
+              <div className="label-caps mb-3 flex items-center gap-2">
+                <Share2 className="w-4 h-4" /> Invite friends
+              </div>
+              <div className="flex flex-col gap-2">
+                <ShareMenu
+                  url={`${window.location.origin}/g/${code}`}
+                  groupName={group.name}
+                />
+                <button
+                  className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
+                  onClick={onCopyCode}
+                  data-testid="copy-code-btn"
+                >
+                  <span className="label-caps">Code</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono tracking-widest font-bold">{group.code}</span>
+                    <Copy className="w-4 h-4" />
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* Main */}
+        <main className="lg:col-span-9 space-y-6">
+          {/* Action-row tabs sit inside the main column so they only span
+              the heatmap width — Quick Stats on the left stays clean. */}
+          <div
+            className="grid grid-cols-3 sm:flex sm:items-stretch gap-2 sm:gap-3"
+            data-testid="action-row"
+          >
+            <button
+              onClick={() => { setTab("dates"); setEditMode(false); }}
+              data-testid="tab-dates"
+              className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
+                tab === "dates" && !editMode ? "" : "ghost"
+              }`}
+            >
+              <span className="sm:hidden">Orbits</span>
+              <span className="hidden sm:inline">Sync Our Orbits</span>
+            </button>
+            <button
+              className={`neo-btn flex-1 justify-center px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${editMode ? "" : "ghost"}`}
+              onClick={onDoneEditing}
+              disabled={savingExit}
+              data-testid="toggle-edit-btn"
+            >
+              <span className="sm:hidden">{editMode ? (savingExit ? "Saving..." : "Done") : "Schedule"}</span>
+              <span className="hidden sm:inline">{editMode ? (savingExit ? "Saving..." : "Done editing") : "Make My Schedule"}</span>
+            </button>
+            <button
+              onClick={() => { setTab("members"); setEditMode(false); }}
+              data-testid="tab-members"
+              className={`neo-btn flex-1 justify-center font-heading font-extrabold px-3 py-3 sm:px-5 sm:py-3.5 text-sm sm:text-base ${
+                tab === "members" ? "" : "ghost"
+              }`}
+            >
+              <span className="sm:hidden">Members</span>
+              <span className="hidden sm:inline">Members' schedule</span>
+            </button>
+          </div>
+
+          {/* Range controls — minimalist chip presets. Custom inputs only
+              appear when the user picks "Custom…" so the default state has
+              just two compact rows of pills. Hidden on Sync Our Orbits.
+              Also hidden in recurring mode — there are no calendar dates to range over. */}
+          {!(tab === "dates" && !editMode) && !isRecurring && (
+            <RangeChipBar
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              setRangeStart={setRangeStart}
+              setRangeEnd={setRangeEnd}
+              hourFrom={hourFrom}
+              hourTo={hourTo}
+              setHourFrom={setHourFrom}
+              setHourTo={setHourTo}
+              now={now}
+              dayCount={columns.length}
+            />
+          )}
+
+          {/* Sync Our Orbits — week-snapshot navigator (only meaningful for
+              date-bound groups; recurring groups always show a weekday grid). */}
+          {tab === "dates" && !editMode && !isRecurring && (
+            <div
+              className="neo-card p-4 sm:p-5 flex items-center justify-between gap-3 flex-nowrap"
+              style={{ background: "var(--pastel-mint)" }}
+              data-testid="weekly-snapshot-banner"
+            >
+              <span className="label-caps text-sm sm:text-base shrink-0">
+                Week snapshot
+              </span>
+
+              {/* Arrows hug the week label tightly on both sides. */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition shrink-0"
+                  onClick={() => setWeekOffset((o) => o - 1)}
+                  data-testid="week-prev-btn"
+                  aria-label="Previous week"
+                  title="Previous week"
+                >
+                  <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+                </button>
+                <span
+                  className="font-heading font-black text-lg sm:text-2xl whitespace-nowrap text-center tracking-tight px-2"
+                  data-testid="week-snapshot-label"
+                >
+                  {formatDateShort(week.monday)} → {formatDateShort(week.sunday)}
+                </span>
+                <button
+                  type="button"
+                  className="w-11 h-11 rounded-full border-2 border-slate-900 bg-white grid place-items-center hover:bg-[var(--pastel-yellow)] transition shrink-0"
+                  onClick={() => setWeekOffset((o) => o + 1)}
+                  data-testid="week-next-btn"
+                  aria-label="Next week"
+                  title="Next week"
+                >
+                  <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* "This week" reset lives at the far end so the arrows stay
+                  glued to the week label. Placeholder keeps the layout
+                  balanced when the user is already on the current week. */}
+              <button
+                type="button"
+                className="neo-btn ghost text-sm whitespace-nowrap shrink-0"
+                onClick={() => setWeekOffset(0)}
+                data-testid="week-reset-btn"
+                aria-hidden={weekOffset === 0}
+                tabIndex={weekOffset === 0 ? -1 : 0}
+                style={{
+                  visibility: weekOffset === 0 ? "hidden" : "visible",
+                }}
+                title="Jump back to this week"
+              >
+                This week
+              </button>
+            </div>
+          )}
+
+          {/* Focus banner */}
+          {focusedMembers.length > 0 && (
+            <div
+              className="neo-card p-3 flex items-center gap-3 flex-wrap"
+              style={{ background: "var(--pastel-yellow)" }}
+              data-testid="focus-banner"
+            >
+              <div className="flex -space-x-2 shrink-0">
+                {focusedMembers.slice(0, 4).map((fm) => (
+                  <span
+                    key={fm.id}
+                    className="w-5 h-5 rounded-full border-2 shrink-0"
+                    style={{ borderColor: "var(--ink)", background: fm.color }}
+                    title={fm.name}
+                  />
+                ))}
+              </div>
+              <span className="text-sm">
+                {focusedMembers.length === 1 ? (
+                  <>
+                    Showing only{" "}
+                    <span className="font-heading font-black">{focusedMembers[0].name}</span>'s schedule
+                  </>
+                ) : (
+                  <>
+                    Comparing{" "}
+                    <span className="font-heading font-black">
+                      {focusedMembers.map((fm) => fm.name).join(", ")}
+                    </span>{" "}
+                    — gold cells = all of them are free
+                  </>
+                )}
+              </span>
+              <div className="flex-1" />
+              <button
+                onClick={() => setFocusMemberIds([])}
+                className="neo-btn ghost text-xs"
+                data-testid="focus-banner-clear"
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
+
+          {/* Content */}
+          {tab === "members" ? (
+            <MembersSchedule
+              members={visibleMembers}
+              reasons={group.reasons}
+              columns={columns}
+            />
+          ) : editMode && me ? (
+            <AvailabilityEditor
+              ref={editorRef}
+              code={code}
+              me={me}
+              reasons={group.reasons}
+              columns={columns}
+              mode={gridMode}
+              hourFrom={isRecurring ? 0 : hourFrom}
+              hourTo={isRecurring ? 23 : hourTo}
+              minuteStep={minuteStep}
+              onMinuteStepChange={setMinuteStep}
+              onReasonsChange={(next) =>
+                setGroup((g) => ({ ...g, reasons: next }))
+              }
+              onSaved={(slots) => {
+                setGroup((g) => ({
+                  ...g,
+                  members: g.members.map((m) => (m.id === me.id ? { ...m, slots } : m)),
+                }));
+              }}
+            />
+          ) : (
+            <HeatmapGrid
+              members={visibleMembers}
+              reasons={group.reasons}
+              columns={heatmapColumns}
+              mode={gridMode}
+              hourFrom={0}
+              hourTo={23}
+              minuteStep={60}
+              heatColors={undefined}
+              focusMode={focusedMembers.length > 0}
+              compareCount={focusedMembers.length}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Join modal */}
+      {joinOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 grid place-items-center p-4 z-50"
+          data-testid="join-modal"
+        >
+          <form onSubmit={onJoin} className="neo-card p-6 max-w-sm w-full bg-white">
+            <div className="label-caps mb-2">Join group</div>
+            <h3 className="font-heading font-black text-2xl mb-1">{group.name}</h3>
+            <p className="text-sm text-slate-600 mb-4">Pick a display name to show in the heatmap.</p>
+            <input
+              autoFocus
+              className="neo-input w-full mb-4"
+              placeholder="Your name"
+              value={joinName}
+              onChange={(e) => setJoinName(e.target.value)}
+              data-testid="join-modal-name-input"
+            />
+            <button type="submit" className="neo-btn w-full flex items-center justify-center gap-2" data-testid="join-modal-submit-btn">
+              <Plus className="w-4 h-4" /> Join
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Astral + Toolkit live in a draggable floating launcher reachable
+          from any scroll position on the page. */}
+      <FloatingLauncher
+        group={group}
+        memberId={memberId}
+        code={code}
+        defaultSide={
+          (group.members || []).find((m) => m.id === memberId)?.prefs
+            ?.fab_side
+        }
+        onGroupRefresh={(updater) => {
+          if (typeof updater === "function") {
+            setGroup((prev) => updater(prev));
+          } else if (updater) {
+            setGroup(updater);
+          }
+        }}
+        suggestMeetingProps={{
+          members: visibleMembers,
+          columns,
+          mode: gridMode,
+          hourFrom,
+          hourTo,
+          minuteStep: 60,
+          groupName: group.name,
+          groupCode: group.code,
+        }}
+      />
+    </div>
+  );
 
   return (
     <div

@@ -541,6 +541,17 @@ html:not(.dark) .gradient-text {
     animation: tab-content-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
+/* Schedule edit mode entrance — slides UP from below instead of in from the
+   right, signalling the user is opening an "editing layer" on top of Plan
+   rather than navigating between sibling tabs. */
+@keyframes tab-content-up {
+    from { transform: translateY(18px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+.tab-content-anim--up {
+    animation: tab-content-up 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
 @keyframes pop-in {
     from {
         opacity: 0;

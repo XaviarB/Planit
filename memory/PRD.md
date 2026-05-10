@@ -15,6 +15,16 @@ The user iteratively requests UI/UX improvements to a no-account group availabil
 - Drawers anchored to the FAB orb: AstralDrawer (remix/history), MyToolsDrawer (busy/toolkit)
 
 ## Implementation log
+- **Feb 2026** — Mobile legend consolidation + edit-mode motion polish:
+  - New component `HeatmapLegendStrip.jsx` — compact 5-box gradient (`--heat-all → --heat-3 → --heat-2 → --heat-1 → --heat-0`) flanked by `FREE` / `NOT FREE` labels. Wrapped in a `neo-card` so it reads as a single decisive block.
+  - `HeatmapGrid.jsx` — when transposed (mobile), drops the "Tap a cell for details" hint and renders `<HeatmapLegendStrip>` directly below the heatmap heading.
+  - `AvailabilityEditor.jsx` — when transposed, replaces the verbose "Tap & drag cells to mark busy with this reason…" helper text with the same `<HeatmapLegendStrip>`.
+  - `Group.jsx` (mobile branch) — removed the trailing `<LegendEditor />` block under the Plan-tab heatmap; legend is now inline only.
+  - `Group.jsx` (mobile `<main>`) — re-keyed by both `mainTab` and `editMode`, with two animation classes:
+    - `tab-content-anim` (slide-from-right, 320ms) for tab swaps
+    - `tab-content-anim--up` (slide-from-below, 340ms) when entering Schedule edit mode → reads as an editing layer over Plan instead of a sibling tab.
+  - `index.css` — added `@keyframes tab-content-up` and `.tab-content-anim--up`.
+
 - **Feb 2026** — Mobile polish bundle (Mon-first editor + Busy chip + tab animation + Customize fit):
   - `Group.jsx` (mobile branch) — added `editorColumnsMobile`: rotates the editor's `columns` array so Monday is first, mirroring the Plan-tab heatmap. Date-mode only; weekly mode already starts on `d0`.
   - `AvailabilityEditor.jsx` — renamed the no-reason chip from **"No reason"** → **"Busy"** and the legend swatch from **"Busy (no reason)"** → **"Busy"** (applies to all layouts, not mobile-only).

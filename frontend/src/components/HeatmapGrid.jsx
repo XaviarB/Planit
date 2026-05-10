@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { buildTimeSlots, timeLabel, heatColor, withSlotMap, memberStatusAt, dateToDayIdx } from "../lib/schedule";
+import HeatmapLegendStrip from "./HeatmapLegendStrip";
 
 /**
  * HeatmapGrid — group availability heatmap.
@@ -222,10 +223,17 @@ export default function HeatmapGrid({
             ? "Member schedule"
             : "Group availability heatmap"}
         </div>
-        <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
-          {transposed ? "Tap a cell for details" : "Hover a cell for details"}
-        </div>
+        {!transposed && (
+          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
+            Hover a cell for details
+          </div>
+        )}
       </div>
+
+      {/* Mobile-only: 5-box gradient legend replaces the stacked legend
+          card + tap hint, giving the whole "what do these colors mean"
+          context at a glance directly above the grid. */}
+      {transposed && <HeatmapLegendStrip className="mb-4" />}
 
       {transposed ? (
         // ── Transposed: days on rows, hours on columns ──────────────────

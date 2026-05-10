@@ -3,6 +3,7 @@ import { buildTimeSlots, timeLabel } from "../lib/schedule";
 import { updateSlots, addReason, deleteReason, astralParseBusy } from "../lib/api";
 import { toast } from "sonner";
 import { Settings, Plus, X, ChevronDown, Repeat, Sparkles, Loader2, Palette, Type } from "lucide-react";
+import HeatmapLegendStrip from "./HeatmapLegendStrip";
 
 // ── Personal editor "skin" — per-user theme & font for THIS user's editing
 // view only. Stored locally; never sent to the backend, so it can't leak onto
@@ -414,11 +415,18 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
         </button>
       </div>
 
-      {/* Reason helper text + customize labels panel */}
+      {/* Reason helper text + customize labels panel.
+          On mobile (transposed grid) we drop the verbose instructional text
+          in favour of the same 5-box gradient legend used on the Plan tab,
+          which conveys the heat colours at a glance. */}
       <div className="mb-4">
-        <div className="text-xs text-slate-600">
-          Tap & drag cells to mark busy with this reason. Tap again to mark free. Hit <b>Done editing</b> when finished — it saves automatically.
-        </div>
+        {orientation === "days-rows" ? (
+          <HeatmapLegendStrip />
+        ) : (
+          <div className="text-xs text-slate-600">
+            Tap & drag cells to mark busy with this reason. Tap again to mark free. Hit <b>Done editing</b> when finished — it saves automatically.
+          </div>
+        )}
 
         {customizeOpen && (
           <div

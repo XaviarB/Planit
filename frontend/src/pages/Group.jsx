@@ -938,9 +938,13 @@ export default function GroupPage() {
         </header>
 
         {/* ─── TAB CONTENT ───
-            Re-keyed by `mainTab` so React remounts the subtree on each
-            tab swap, triggering the `.tab-content-anim` slide-fade entrance. */}
-        <main className="px-4 py-4 space-y-4 tab-content-anim" key={`tab-${mainTab}`}>
+            Re-keyed by `mainTab` AND `editMode` so React remounts the subtree
+            on each tab swap (slide-from-right) and on edit-mode entrance
+            (slide-from-below — feels like an editing layer over Plan). */}
+        <main
+          className={`px-4 py-4 space-y-4 ${editMode ? "tab-content-anim--up" : "tab-content-anim"}`}
+          key={`tab-${mainTab}-${editMode ? "edit" : "view"}`}
+        >
           {/* PLAN TAB — heatmap, edit availability, sub-tab segmented */}
           {mainTab === "plan" && (
             <div className="space-y-4">
@@ -1159,11 +1163,8 @@ export default function GroupPage() {
                   orientation="days-rows"
                 />
               )}
-
-              {/* Heatmap legend stays at the bottom of the Plan tab */}
-              <div className="pop-in" style={{ animationDelay: "120ms" }}>
-                <LegendEditor />
-              </div>
+              {/* Mobile: legend lives inline at the top of the heatmap (gradient
+                  strip), so the verbose stacked LegendEditor card is omitted here. */}
             </div>
           )}
 

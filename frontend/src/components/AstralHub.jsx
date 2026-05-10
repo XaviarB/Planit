@@ -96,6 +96,24 @@ export default function AstralHub({
   const inputRef = useRef(null);
   const blockRef = useRef(null);
 
+  // Mobile detection for full-screen hub presentation. Stays in sync with
+  // window resizes so a tablet flip live-flows the layout.
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(max-width: 639px)").matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(max-width: 639px)");
+    const recompute = () => setIsMobile(mq.matches);
+    if (mq.addEventListener) mq.addEventListener("change", recompute);
+    else mq.addListener(recompute);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", recompute);
+      else mq.removeListener(recompute);
+    };
+  }, []);
+
   // Reset when closed.
   useEffect(() => {
     if (!open) {
@@ -143,8 +161,24 @@ export default function AstralHub({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, astralOpen, toolsOpen, mode]);
 
-  // ── Anchor positioning. Wider in results mode for legibility. ──
+  // ── Anchor positioning. Wider in results mode for legibility.
+  // On mobile (≤639px) the hub takes over the full screen so it feels like
+  // a native page rather than a popup bubble. ──
   const blockStyle = (() => {
+    if (isMobile) {
+      // Full-screen takeover. Inner container drops its rounded corners and
+      // hard shadow (handled in JSX via the `isMobile` flag).
+      return {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: "100vw",
+        height: "100vh",
+        height: "100dvh",
+        maxHeight: "100dvh",
+      };
+    }
     const a = anchor || { side: "right", offset: 0.5 };
     const PAD = 16;
     const ORB = 64;
@@ -155,15 +189,6 @@ export default function AstralHub({
     }
     const winW = window.innerWidth;
     const winH = window.innerHeight;
-    if (winW < 640) {
-      return {
-        left: "50%",
-        top: "50%",
-        transform: "translate(-50%, -50%)",
-        width: `min(${W}px, calc(100vw - 24px))`,
-        maxHeight: "calc(100vh - 32px)",
-      };
-    }
     if (a.side === "right") {
       const top = clamp(a.offset * winH - H / 2, PAD, winH - H - PAD);
       return { right: ORB + PAD, top, width: W, maxHeight: `calc(100vh - ${PAD * 2}px)` };
@@ -270,10 +295,11 @@ export default function AstralHub({
 
   return (
     <>
-      {/* Mobile-only backdrop. Desktop hub is anchored beside the orb. */}
-      {open && (
+      {/* Backdrop. On desktop it provides a soft modal dim;
+          on mobile the hub itself fills the screen, so we skip it. */}
+      {open && !isMobile && (
         <div
-          className="fixed inset-0 z-[55] sm:bg-transparent bg-slate-900/40"
+          className="fixed inset-0 z-[55] bg-transparent"
           aria-hidden="true"
           onClick={onClose}
         />
@@ -282,18 +308,23 @@ export default function AstralHub({
       {open && (
         <div
           ref={blockRef}
-          className="fixed z-[60] hub-block flex flex-col"
+          className={`fixed z-[60] hub-block flex flex-col ${isMobile ? "hub-block--mobile" : ""}`}
           style={blockStyle}
           data-testid="astral-hub"
           data-mode={mode}
+          data-mobile={isMobile ? "true" : "false"}
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            className="rounded-3xl border-2 border-slate-900 overflow-hidden flex flex-col flex-1 min-h-0"
+            className={`${
+              isMobile
+                ? "border-0"
+                : "rounded-3xl border-2 border-slate-900"
+            } overflow-hidden flex flex-col flex-1 min-h-0`}
             style={{
               background:
                 "linear-gradient(160deg, var(--card) 0%, var(--card-soft) 100%)",
-              boxShadow: "6px 6px 0 0 var(--ink)",
+              boxShadow: isMobile ? "none" : "6px 6px 0 0 var(--ink)",
             }}
           >
             {/* Header */}
@@ -544,15 +575,17 @@ function MenuBody({
         )}
       </div>
 
-      {/* Tile column — 1x4 vertical stack */}
+      {/* Tile column — 1x3 vertical stack.
+          "Suggest a time" was retired in favor of the bottom-tab "My Schedule"
+          flow (where the user marks themselves busy directly on the heatmap). */}
       <div className="flex flex-col gap-2">
         {tile({
-          icon: Sparkles,
-          title: "Suggest a time",
-          hint: "Top free overlaps for the crew, ready to copy & invite",
+          icon: Clock,
+          title: "I'm busy…",
+          hint: "Natural-language → busy slots auto-merged",
           accent: "var(--pastel-mint)",
-          testId: "hub-tile-suggest-time",
-          onClick: () => onSuggestMeeting && onSuggestMeeting(),
+          testId: "hub-tile-busy",
+          onClick: () => openTools("busy"),
         })}
         {tile({
           icon: Shuffle,
@@ -561,14 +594,6 @@ function MenuBody({
           accent: "var(--pastel-lavender)",
           testId: "hub-tile-remix",
           onClick: () => openDrawer("remix"),
-        })}
-        {tile({
-          icon: Clock,
-          title: "I'm busy…",
-          hint: "Natural-language → busy slots auto-merged",
-          accent: "var(--pastel-peach)",
-          testId: "hub-tile-busy",
-          onClick: () => openTools("busy"),
         })}
         {tile({
           icon: Wand2,

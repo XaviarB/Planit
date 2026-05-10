@@ -1,37 +1,58 @@
-import { Calendar, Users, MapPin, MoreHorizontal } from "lucide-react";
+import { Calendar, Users, Edit3, MoreHorizontal } from "lucide-react";
 import AstralBot from "./AstralBot";
 
 /**
  * BottomTabBar — the iOS/Android-style mobile tab bar that anchors the
  * Group page experience. Five "slots":
  *
- *   [Plan] [Crew]  ✦Astral✦  [Hangouts] [More]
+ *   [Plan] [Crew]  ✦Astral✦  [My Schedule] [More]
  *
  * The center slot is a slightly elevated, rounded mascot orb (AstralBot)
  * with a subtle pulse-ring — tapping it opens the Astral hub.
+ *
+ * "My Schedule" is a *button-tab* hybrid: tapping it does NOT switch
+ * tab content — it instead toggles the Plan tab into edit mode (or
+ * saves and exits if already editing). The visual "active" state is
+ * driven by the `editMode` prop, not `activeTab`.
  *
  * Visual language:
  *   - Light mode: cream surface, 2px black border, 4px hard drop shadow.
  *   - Dark  mode: deep navy surface, 1px lavender border, lavender→blue
  *                 glow shadow (driven by the global --stroke* tokens).
- *
- * Active tab pill uses the brand "ink" fill in light mode and a vibrant
- * lavender→blue gradient in dark mode (handled by the .neo-btn override
- * but applied here as a class).
  */
-const TABS = [
-  { key: "plan",     label: "Plan",     Icon: Calendar },
-  { key: "crew",     label: "Crew",     Icon: Users },
-  { key: "hangouts", label: "Hangouts", Icon: MapPin },
-  { key: "more",     label: "More",     Icon: MoreHorizontal },
+const PLAN_TABS = [
+  { key: "plan", label: "Plan", Icon: Calendar },
+  { key: "crew", label: "Crew", Icon: Users },
+];
+const TRAILING_TABS = [
+  // "My Schedule" is action-style: tap → toggle edit mode (handled via onMyScheduleClick).
+  { key: "myschedule", label: "Schedule", Icon: Edit3, action: "myschedule" },
+  { key: "more", label: "More", Icon: MoreHorizontal },
 ];
 
 export default function BottomTabBar({
   activeTab,
   onTabChange,
+  onMyScheduleClick,
+  editMode = false,
   onAstralOpen,
   astralOpen = false,
 }) {
+  const handleClick = (tab) => {
+    if (tab.action === "myschedule") {
+      onMyScheduleClick && onMyScheduleClick();
+      return;
+    }
+    onTabChange(tab.key);
+  };
+
+  const isActive = (tab) => {
+    if (tab.action === "myschedule") return editMode;
+    // While editing, no nav-tab pill should be lit.
+    if (editMode) return false;
+    return activeTab === tab.key;
+  };
+
   return (
     <div className="mobile-tabbar" data-testid="mobile-tabbar">
       {/* The tab strip — 4 tabs with a hole in the middle for the orb. */}
@@ -44,12 +65,12 @@ export default function BottomTabBar({
         }}
       >
         {/* Slot 1, 2 */}
-        {TABS.slice(0, 2).map((t) => (
+        {PLAN_TABS.map((t) => (
           <TabButton
             key={t.key}
             tab={t}
-            active={activeTab === t.key}
-            onClick={() => onTabChange(t.key)}
+            active={isActive(t)}
+            onClick={() => handleClick(t)}
           />
         ))}
 
@@ -93,12 +114,12 @@ export default function BottomTabBar({
         </button>
 
         {/* Slot 4, 5 */}
-        {TABS.slice(2).map((t) => (
+        {TRAILING_TABS.map((t) => (
           <TabButton
             key={t.key}
             tab={t}
-            active={activeTab === t.key}
-            onClick={() => onTabChange(t.key)}
+            active={isActive(t)}
+            onClick={() => handleClick(t)}
           />
         ))}
       </div>

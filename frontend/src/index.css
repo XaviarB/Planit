@@ -517,6 +517,20 @@ html:not(.dark) .gradient-text {
     }
 }
 
+/* Astral Hub — mobile full-screen takeover.
+   The hub becomes a real "page" instead of a centered popup. We respect the
+   safe-area insets at the bottom (notched/home-indicator devices) and slide
+   it up from below for that native-app feel. */
+.hub-block--mobile {
+    /* Stretch to safe-area-aware bottom. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: hub-slide-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes hub-slide-up {
+    from { transform: translateY(8%); opacity: 0; }
+    to   { transform: translateY(0);  opacity: 1; }
+}
+
 @keyframes pop-in {
     from {
         opacity: 0;

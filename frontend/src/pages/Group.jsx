@@ -86,8 +86,11 @@ export default function GroupPage() {
 
   // Initial view state hydrated from localStorage (per-group).
   const persisted = getGroupViewState(code) || {};
-  // mainTab = which mobile bottom-tab is active (plan / crew / hangouts / more)
-  const [mainTab, setMainTab] = useState(persisted.mainTab || "plan");
+  // mainTab = which mobile bottom-tab is active (plan / crew / more)
+  // Migrate stale "hangouts" persisted value (the tab was merged into More).
+  const [mainTab, setMainTab] = useState(
+    persisted.mainTab === "hangouts" ? "more" : (persisted.mainTab || "plan")
+  );
   const [tab, setTab] = useState(persisted.tab || "dates"); // dates | members (sub-tab inside Plan)
   const [editMode, setEditMode] = useState(false);
   const [astralOpen, setAstralOpen] = useState(false); // controls AstralHub on mobile
@@ -946,16 +949,20 @@ export default function GroupPage() {
                 </div>
               )}
 
-              {/* Make My Schedule — primary CTA */}
-              <button
-                className={`neo-btn w-full flex items-center justify-center gap-2 py-3.5 text-base ${editMode ? "" : "ghost"}`}
-                onClick={onDoneEditing}
-                disabled={savingExit}
-                data-testid="toggle-edit-btn"
-              >
-                <Edit3 className="w-4 h-4" />
-                {editMode ? (savingExit ? "Saving..." : "Done editing") : "Make my schedule"}
-              </button>
+              {/* "Make my schedule" lives in the bottom tab bar now (Schedule tab),
+                  so it isn't repeated here. While editing we still surface a
+                  Done editing CTA so the user can save without hunting for it. */}
+              {editMode && (
+                <button
+                  className="neo-btn w-full flex items-center justify-center gap-2 py-3.5 text-base"
+                  onClick={onDoneEditing}
+                  disabled={savingExit}
+                  data-testid="toggle-edit-btn"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  {savingExit ? "Saving..." : "Done editing"}
+                </button>
+              )}
 
               {/* Range / hour controls — appear in members or edit modes (not in Sync Orbits / not in recurring) */}
               {!(tab === "dates" && !editMode) && !isRecurring && (
@@ -1207,9 +1214,14 @@ export default function GroupPage() {
             </div>
           )}
 
-          {/* HANGOUTS TAB — locked / tentative hangouts + suggest a meeting */}
-          {mainTab === "hangouts" && (
+          {/* HANGOUTS — relocated into the More tab (the "Hangouts" bottom-tab
+              slot is now "My Schedule"). The hangouts list + Suggest a meeting
+              button live in the More tab below. */}
+
+          {/* MORE TAB — hangouts list, suggest a meeting, share, group settings, customize */}
+          {mainTab === "more" && (
             <div className="space-y-4">
+              {/* Suggest a meeting — primary CTA, kept here since the Hangouts tab is gone. */}
               <button
                 className="neo-btn w-full flex items-center justify-center gap-2 py-3.5 text-base"
                 onClick={() => setSuggestOpen(true)}
@@ -1219,8 +1231,9 @@ export default function GroupPage() {
                 Suggest a meeting
               </button>
 
+              {/* Locked / tentative hangouts — same component as desktop sidebar. */}
               {!hiddenPanels.has("hangouts") ? (
-                <div className="pop-in" style={{ animationDelay: "60ms" }}>
+                <div className="pop-in" style={{ animationDelay: "0ms" }}>
                   <HangoutsList
                     group={group}
                     memberId={memberId}
@@ -1231,25 +1244,20 @@ export default function GroupPage() {
                 </div>
               ) : (
                 <div
-                  className="neo-card p-6 text-center"
+                  className="neo-card p-4 text-center"
                   style={{ background: "var(--pastel-lavender)" }}
                 >
-                  <MapPin className="w-8 h-8 mx-auto mb-2 opacity-60" />
-                  <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-                    Hangouts panel hidden — turn it on in More → Customize → Personal.
+                  <MapPin className="w-6 h-6 mx-auto mb-2 opacity-60" />
+                  <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                    Hangouts panel hidden — turn it on in Customize → Personal.
                   </p>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* MORE TAB — share, group settings, customize */}
-          {mainTab === "more" && (
-            <div className="space-y-4">
               {!hiddenPanels.has("share") && (
                 <div
                   className="neo-card p-4 pop-in relative z-30"
-                  style={{ animationDelay: "0ms" }}
+                  style={{ animationDelay: "60ms" }}
                   data-testid="share-card"
                 >
                   <div className="label-caps mb-3 flex items-center gap-2">
@@ -1279,7 +1287,7 @@ export default function GroupPage() {
 
               <div
                 className="neo-card p-4 pop-in"
-                style={{ animationDelay: "60ms" }}
+                style={{ animationDelay: "120ms" }}
                 data-testid="group-settings-card"
               >
                 <div className="label-caps mb-3 flex items-center gap-2">
@@ -1358,12 +1366,20 @@ export default function GroupPage() {
         </div>
       )}
 
-      {/* Bottom mobile tab bar — fixed, hosts the 4 tabs + center Astral orb. */}
+      {/* Bottom mobile tab bar — fixed, hosts Plan / Crew / Astral / My Schedule / More.
+          Tapping "My Schedule" toggles edit mode on the Plan tab (via onDoneEditing). */}
       <BottomTabBar
         activeTab={mainTab}
+        editMode={editMode}
         onTabChange={(k) => {
-          setMainTab(k);
+          // Switching to a nav tab while editing implicitly drops edit mode.
           if (editMode) setEditMode(false);
+          setMainTab(k);
+        }}
+        onMyScheduleClick={() => {
+          // Force Plan tab → dates sub-tab, then enter (or exit + save) edit mode.
+          if (mainTab !== "plan") setMainTab("plan");
+          onDoneEditing();
         }}
         onAstralOpen={() => setAstralOpen(true)}
         astralOpen={astralOpen}

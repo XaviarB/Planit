@@ -120,6 +120,10 @@ class Member(BaseModel):
     # identically.
     prefs: MemberPrefs = Field(default_factory=MemberPrefs)
     joined_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # Cross-group sync identity. Two members sharing the same user_token
+    # are treated as the same person; their slots are kept in lock-step so
+    # a single master schedule reflects across every crew the user is in.
+    user_token: Optional[str] = None
 
 
 class HangoutRSVP(BaseModel):
@@ -248,10 +252,12 @@ class CreateGroupReq(BaseModel):
     group_name: str
     creator_name: str
     location: Optional[str] = None  # optional group home base
+    user_token: Optional[str] = None  # cross-group sync identity
 
 
 class JoinGroupReq(BaseModel):
     name: str
+    user_token: Optional[str] = None  # cross-group sync identity
 
 
 class UpdateSlotsReq(BaseModel):
@@ -420,7 +426,14 @@ async def create_group(req: CreateGroupReq):
         name=req.creator_name.strip() or "Anon",
         color=random_member_color(0),
         location=(req.location or "").strip() or None,
+        user_token=(req.user_token or None),
     )
+    # If this user is already in other groups, hydrate the new member with
+    # their existing master schedule so they don't have to redraw it.
+    if req.user_token:
+        master = await _latest_member_for_token(req.user_token)
+        if master and master.get("slots"):
+            creator.slots = [AvailabilitySlot(**{**s, "reason_id": None}) for s in master["slots"]]
     reasons = [BusyReason(**r) for r in DEFAULT_REASONS]
     group = Group(
         code=code,
@@ -504,7 +517,17 @@ async def leave_group(code: str, member_id: str):
 async def join_group(code: str, req: JoinGroupReq):
     g = await find_group(code)
     idx = len(g.get("members", []))
-    member = Member(name=req.name.strip() or f"Friend {idx+1}", color=random_member_color(idx))
+    member = Member(
+        name=req.name.strip() or f"Friend {idx+1}",
+        color=random_member_color(idx),
+        user_token=(req.user_token or None),
+    )
+    # Carry over the master schedule for this user_token so the new
+    # membership lights up immediately with the same busy/free pattern.
+    if req.user_token:
+        master = await _latest_member_for_token(req.user_token)
+        if master and master.get("slots"):
+            member.slots = [AvailabilitySlot(**{**s, "reason_id": None}) for s in master["slots"]]
     await db.groups.update_one(
         {"code": code.upper()},
         {"$push": {"members": member.model_dump()}}
@@ -515,12 +538,12 @@ async def join_group(code: str, req: JoinGroupReq):
 @api_router.put("/groups/{code}/members/{member_id}/slots")
 async def update_slots(code: str, member_id: str, req: UpdateSlotsReq):
     g = await find_group(code)
-    found = False
+    me_row = None
     for m in g["members"]:
         if m["id"] == member_id:
-            found = True
+            me_row = m
             break
-    if not found:
+    if not me_row:
         raise HTTPException(status_code=404, detail="Member not found")
 
     slots = [s.model_dump() for s in req.slots]
@@ -528,7 +551,14 @@ async def update_slots(code: str, member_id: str, req: UpdateSlotsReq):
         {"code": code.upper(), "members.id": member_id},
         {"$set": {"members.$.slots": slots}}
     )
-    return {"ok": True, "count": len(slots)}
+    # Broadcast to every other group this user belongs to — this is the
+    # whole point of cross-group sync: one schedule, all crews.
+    fan_out = 0
+    if me_row.get("user_token"):
+        fan_out = await _broadcast_slots(
+            me_row["user_token"], code.upper(), member_id, slots,
+        )
+    return {"ok": True, "count": len(slots), "synced_to": fan_out}
 
 
 @api_router.put("/groups/{code}/members/{member_id}")
@@ -1510,6 +1540,144 @@ def random_member_color(idx: int) -> str:
         "#F1C40F", "#E91E63", "#00BCD4", "#8E44AD",
     ]
     return palette[idx % len(palette)]
+
+
+# ---------- Cross-group schedule sync ----------
+# Two members with the same `user_token` (a stable browser UUID — no
+# accounts) are treated as the same human. Their slots are kept in
+# lock-step so a person edits ONE schedule and every group they belong
+# to sees the same busy/free heatmap. Reasons stay group-scoped (labels
+# differ per group), so reason_id is stripped on cross-group copies.
+
+def _strip_reason_ids(slots: List[Dict]) -> List[Dict]:
+    out = []
+    for s in slots or []:
+        c = dict(s)
+        # null reason_id is fine — group reasons may not match across crews
+        c["reason_id"] = None
+        out.append(c)
+    return out
+
+
+async def _latest_member_for_token(user_token: str) -> Optional[Dict]:
+    """Pick the member with the most recently updated slot set as the
+    canonical source-of-truth for this user_token. Falls back to
+    `joined_at` desc when no slots exist anywhere yet."""
+    if not user_token:
+        return None
+    cursor = db.groups.find(
+        {"members.user_token": user_token},
+        {"members": 1, "_id": 0},
+    )
+    best: Optional[Dict] = None
+    best_score = (0, "")
+    async for g in cursor:
+        for m in (g.get("members") or []):
+            if m.get("user_token") != user_token:
+                continue
+            score = (len(m.get("slots") or []), m.get("joined_at") or "")
+            if score > best_score:
+                best_score = score
+                best = m
+    return best
+
+
+async def _broadcast_slots(
+    user_token: Optional[str],
+    skip_group_code: Optional[str],
+    skip_member_id: Optional[str],
+    slots: List[Dict],
+) -> int:
+    """Replace `slots` on every member with the matching user_token, except
+    the one we just updated. reason_id is dropped because group reasons
+    are local to each group. Returns the number of rows touched."""
+    if not user_token:
+        return 0
+    cleaned = _strip_reason_ids(slots)
+    cursor = db.groups.find(
+        {"members.user_token": user_token},
+        {"code": 1, "members.id": 1, "members.user_token": 1, "_id": 0},
+    )
+    touched = 0
+    async for g in cursor:
+        for m in (g.get("members") or []):
+            if m.get("user_token") != user_token:
+                continue
+            if g.get("code") == skip_group_code and m.get("id") == skip_member_id:
+                continue
+            res = await db.groups.update_one(
+                {"code": g["code"], "members.id": m["id"]},
+                {"$set": {"members.$.slots": cleaned}},
+            )
+            if res.modified_count:
+                touched += 1
+    return touched
+
+
+class ClaimMemberReq(BaseModel):
+    user_token: str
+
+
+@api_router.post("/groups/{code}/members/{member_id}/claim")
+async def claim_member(code: str, member_id: str, req: ClaimMemberReq):
+    """Stamp `user_token` onto an existing member. Idempotent — on first
+    claim we also seed this member's slots from the most recent master
+    schedule attached to the same user_token (so legacy members "catch
+    up" with their owner's other crews)."""
+    if not req.user_token:
+        raise HTTPException(status_code=400, detail="user_token required")
+    g = await find_group(code)
+    me_row = None
+    for m in g.get("members", []):
+        if m.get("id") == member_id:
+            me_row = m
+            break
+    if not me_row:
+        raise HTTPException(status_code=404, detail="Member not found")
+    existing = me_row.get("user_token")
+    if existing and existing != req.user_token:
+        # Token already belongs to someone else — refuse silently to avoid
+        # hijacking another person's identity.
+        return {"ok": False, "reason": "token-mismatch"}
+
+    set_doc: Dict = {"members.$.user_token": req.user_token}
+    seeded = False
+    if not me_row.get("slots"):
+        master = await _latest_member_for_token(req.user_token)
+        if master and master.get("slots"):
+            set_doc["members.$.slots"] = _strip_reason_ids(master["slots"])
+            seeded = True
+    await db.groups.update_one(
+        {"code": code.upper(), "members.id": member_id},
+        {"$set": set_doc},
+    )
+    return {"ok": True, "seeded": seeded}
+
+
+@api_router.get("/members")
+async def list_my_memberships(user_token: str):
+    """Lightweight list of every group this user_token is part of.
+    Used by the schedule editor to render the "Synced across N groups"
+    indicator. Returns code + name + member_id + slot_count per row."""
+    if not user_token:
+        raise HTTPException(status_code=400, detail="user_token required")
+    cursor = db.groups.find(
+        {"members.user_token": user_token},
+        {"code": 1, "name": 1, "members": 1, "_id": 0},
+    )
+    out = []
+    async for g in cursor:
+        for m in (g.get("members") or []):
+            if m.get("user_token") == user_token:
+                out.append({
+                    "code": g.get("code"),
+                    "name": g.get("name"),
+                    "member_id": m.get("id"),
+                    "slot_count": len(m.get("slots") or []),
+                })
+                break
+    out.sort(key=lambda r: r.get("code") or "")
+    return {"memberships": out, "count": len(out)}
 
 
 # ---------- Feedback ----------

@@ -112,6 +112,12 @@ class Member(BaseModel):
     calendars: List[MemberCalendar] = []
     templates: List[BusyTemplate] = []
     joined_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # Cross-group sync identity. Stamped from a browser-stable UUID stored in
+    # localStorage so the same human shows up as the same "you" across every
+    # group they belong to. When two members share a user_token, their slots
+    # (busy/free state) are kept in lock-step server-side so a person only
+    # has to maintain ONE schedule for every crew they're in.
+    user_token: Optional[str] = None
 
 
 class HangoutRSVP(BaseModel):
@@ -185,10 +191,12 @@ class CreateGroupReq(BaseModel):
     group_name: str
     creator_name: str
     location: Optional[str] = None
+    user_token: Optional[str] = None  # cross-group sync identity (see Member)
 
 
 class JoinGroupReq(BaseModel):
     name: str
+    user_token: Optional[str] = None  # cross-group sync identity (see Member)
 
 
 class UpdateSlotsReq(BaseModel):

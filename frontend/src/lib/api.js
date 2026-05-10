@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getOrCreateUserToken } from "./userToken";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -9,14 +10,42 @@ const api = axios.create({ baseURL: API });
 
 export const createGroup = (group_name, creator_name, location) =>
   api
-    .post("/groups", { group_name, creator_name, location: location || null })
+    .post("/groups", {
+      group_name,
+      creator_name,
+      location: location || null,
+      user_token: getOrCreateUserToken(),
+    })
     .then((r) => r.data);
 
 export const getGroup = (code) =>
   api.get(`/groups/${code}`).then((r) => r.data);
 
 export const joinGroup = (code, name) =>
-  api.post(`/groups/${code}/members`, { name }).then((r) => r.data);
+  api
+    .post(`/groups/${code}/members`, {
+      name,
+      user_token: getOrCreateUserToken(),
+    })
+    .then((r) => r.data);
+
+// ---------- Cross-group schedule sync ----------
+// Stamp the local user_token onto an existing member so future slot
+// edits fan out to every group you belong to. Idempotent + safe to call
+// on every page load.
+export const claimMembership = (code, member_id) =>
+  api
+    .post(`/groups/${code}/members/${member_id}/claim`, {
+      user_token: getOrCreateUserToken(),
+    })
+    .then((r) => r.data);
+
+// Lightweight list of every group attached to this browser's user_token,
+// used by the schedule editor to show "Synced across N groups".
+export const listMyMemberships = () =>
+  api
+    .get(`/members`, { params: { user_token: getOrCreateUserToken() } })
+    .then((r) => r.data);
 
 export const updateSlots = (code, member_id, slots) =>
   api

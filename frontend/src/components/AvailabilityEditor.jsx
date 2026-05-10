@@ -2,7 +2,7 @@ import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState
 import { buildTimeSlots, timeLabel } from "../lib/schedule";
 import { updateSlots, addReason, deleteReason, astralParseBusy } from "../lib/api";
 import { toast } from "sonner";
-import { Plus, X, ChevronDown, Repeat, Sparkles, Loader2, Palette, Type } from "lucide-react";
+import { Plus, X, ChevronDown, Repeat, Sparkles, Loader2, Palette, Type, Link2 } from "lucide-react";
 
 // ── Personal editor "skin" — per-user theme & font for THIS user's editing
 // view only. Stored locally; never sent to the backend, so it can't leak onto
@@ -40,6 +40,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
   onReasonsChange,
   onSaved,
   orientation = "hours-rows",
+  syncedGroupCount = 0,
 }, ref) {
   // Internal precision if parent didn't supply one (defaults to 60).
   const [internalStep, setInternalStep] = useState(minuteStep || 60);
@@ -320,6 +321,20 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
 
   return (
     <div className="neo-card p-4 sm:p-6" data-testid="availability-editor">
+      {/* Cross-group sync indicator — when the user belongs to 2+ groups,
+          remind them this single schedule reflects across all of them.
+          Hidden for solo memberships to avoid noise. */}
+      {syncedGroupCount > 1 && (
+        <div
+          className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border-2 border-slate-900 text-[0.65rem] font-bold font-heading uppercase tracking-wider"
+          style={{ background: "var(--pastel-mint)", color: "var(--ink)" }}
+          data-testid="schedule-sync-badge"
+          title="Edits here sync to every group you belong to."
+        >
+          <Link2 className="w-3 h-3" strokeWidth={2.6} />
+          Synced across {syncedGroupCount} groups
+        </div>
+      )}
       {/* Toolbar — Precision · Clear view · Recurring busy all on a single row.
           Precision sits flush-left, the two action buttons hug the right. On narrow
           viewports it wraps gracefully but the desktop default is one continuous row. */}

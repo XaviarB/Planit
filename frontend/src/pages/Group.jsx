@@ -10,6 +10,8 @@ import {
   renameMember,
   getGroupViewState,
   setGroupViewState,
+  claimMembership,
+  listMyMemberships,
 } from "../lib/api";
 import { dateRange, formatDateShort, currentWeekBounds } from "../lib/schedule";
 import { copyToClipboard } from "../lib/clipboard";
@@ -272,6 +274,40 @@ export default function GroupPage() {
   }, [loading, group, memberId]);
 
   const me = group?.members.find((m) => m.id === memberId);
+
+  // ---------- Cross-group schedule sync ----------
+  // Two members across two different groups sharing the same browser
+  // `user_token` are treated as the same person server-side, so their
+  // slots are kept in lock-step. On every group page load we:
+  //   1. Stamp the local token onto `me` if it isn't already (handles
+  //      pre-existing members that joined before sync existed).
+  //   2. Refresh how many crews this user appears in, so the editor can
+  //      surface a "Synced across N groups" badge.
+  const [memberships, setMemberships] = useState({ count: 0, list: [] });
+  useEffect(() => {
+    let cancelled = false;
+    async function syncIdentity() {
+      if (!group?.code || !me) return;
+      try {
+        if (!me.user_token) {
+          await claimMembership(group.code, me.id);
+        }
+        const res = await listMyMemberships();
+        if (!cancelled) {
+          setMemberships({
+            count: res?.count || 0,
+            list: res?.memberships || [],
+          });
+        }
+      } catch {
+        // Non-fatal — sync is a nice-to-have, never block UI.
+      }
+    }
+    syncIdentity();
+    return () => {
+      cancelled = true;
+    };
+  }, [group?.code, me?.id, me?.user_token]);
 
   const onJoin = async (e) => {
     e.preventDefault();
@@ -860,6 +896,7 @@ export default function GroupPage() {
               hourTo={isRecurring ? 23 : hourTo}
               minuteStep={minuteStep}
               onMinuteStepChange={setMinuteStep}
+              syncedGroupCount={memberships.count}
               onReasonsChange={(next) =>
                 setGroup((g) => ({ ...g, reasons: next }))
               }
@@ -1228,6 +1265,7 @@ export default function GroupPage() {
                   hourTo={isRecurring ? 23 : hourTo}
                   minuteStep={minuteStep}
                   onMinuteStepChange={setMinuteStep}
+                  syncedGroupCount={memberships.count}
                   onReasonsChange={(next) =>
                     setGroup((g) => ({ ...g, reasons: next }))
                   }

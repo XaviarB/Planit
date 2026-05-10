@@ -39,6 +39,7 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
   onMinuteStepChange,
   onReasonsChange,
   onSaved,
+  orientation = "hours-rows",
 }, ref) {
   // Internal precision if parent didn't supply one (defaults to 60).
   const [internalStep, setInternalStep] = useState(minuteStep || 60);
@@ -610,67 +611,137 @@ const AvailabilityEditor = forwardRef(function AvailabilityEditor({
         onMouseLeave={() => setDrag(null)}
         onTouchMove={onTouchMove}
         style={{ fontFamily: currentFont.family || undefined }}
+        data-orientation={orientation}
       >
-        <div
-          className="grid gap-1 min-w-fit select-none"
-          style={{
-            gridTemplateColumns: `64px repeat(${columns.length}, minmax(48px, 1fr))`,
-          }}
-        >
-          <div />
-          {columns.map((c) => (
-            <div key={c.key} className="label-caps text-center py-1">
-              {c.label}
-            </div>
-          ))}
+        {orientation === "days-rows" ? (
+          // ── Transposed (mobile): days on rows, hours on columns ──────
+          <div
+            className="grid gap-1 min-w-fit select-none"
+            style={{
+              gridTemplateColumns: `52px repeat(${timeSlots.length}, minmax(22px, 1fr))`,
+            }}
+          >
+            <div />
+            {timeSlots.map(({ hour, minute }, hi) => {
+              const isEdge = hi === 0 || hi === timeSlots.length - 1;
+              const showLabel = minute === 0 && (isEdge || hour % 3 === 0);
+              const isPM = hour >= 12;
+              const display = hour % 12 === 0 ? 12 : hour % 12;
+              return (
+                <div
+                  key={`hh-${hour}-${minute}`}
+                  className="text-[10px] font-semibold text-center py-1 leading-none"
+                  style={{
+                    color: showLabel ? "var(--ink)" : "var(--ink-mute)",
+                  }}
+                >
+                  {showLabel ? `${display}${isPM ? "p" : "a"}` : ""}
+                </div>
+              );
+            })}
 
-          {timeSlots.map(({ hour, minute }) => (
-            <Fragment key={`edit-${hour}-${minute}`}>
-              <div
-                className={`text-[11px] font-semibold flex items-center justify-end pr-2 ${
-                  minute === 0 ? "text-slate-700" : "text-slate-400"
-                }`}
-              >
-                {minute === 0 ? timeLabel(hour, 0) : `:${String(minute).padStart(2, "0")}`}
+            {columns.map((c) => (
+              <Fragment key={`drow-${c.key}`}>
+                <div
+                  className="text-[11px] font-bold flex items-center justify-end pr-2 leading-tight"
+                  style={{ color: "var(--ink)" }}
+                >
+                  {c.label}
+                </div>
+                {timeSlots.map(({ hour, minute }) => {
+                  const status = currentStatus(c.key, hour, minute);
+                  const reason = currentReason(c.key, hour, minute);
+                  const r = reason ? reasonMap[reason] : null;
+                  const bg = status === "busy"
+                    ? (r ? r.color : currentSkin.busyColor)
+                    : "var(--card-soft, var(--card))";
+                  const borderStyle = status === "busy" ? "transparent" : "var(--ink)";
+                  return (
+                    <div
+                      key={`${c.key}-${hour}-${minute}`}
+                      className="heat-cell rounded-md flex items-center justify-center border-2"
+                      style={{
+                        background: bg,
+                        minHeight: 28,
+                        borderColor: borderStyle,
+                        opacity: status === "busy" ? 1 : 0.55,
+                        touchAction: "none",
+                      }}
+                      onMouseDown={() => onCellDown(c.key, hour, minute)}
+                      onMouseEnter={() => onCellEnter(c.key, hour, minute)}
+                      onTouchStart={onTouchStart(c.key, hour, minute)}
+                      data-cell-coord={`${c.key}|${hour}|${minute}`}
+                      data-testid={`edit-cell-${c.key}-${hour}-${minute}`}
+                      title={status === "busy" ? `Busy${r ? " · " + r.label : ""}` : "Free"}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        ) : (
+          // ── Default (desktop): hours on rows, days on columns ────────
+          <div
+            className="grid gap-1 min-w-fit select-none"
+            style={{
+              gridTemplateColumns: `64px repeat(${columns.length}, minmax(48px, 1fr))`,
+            }}
+          >
+            <div />
+            {columns.map((c) => (
+              <div key={c.key} className="label-caps text-center py-1">
+                {c.label}
               </div>
-              {columns.map((c) => {
-                const status = currentStatus(c.key, hour, minute);
-                const reason = currentReason(c.key, hour, minute);
-                const r = reason ? reasonMap[reason] : null;
-                const bg = status === "busy"
-                  ? (r ? r.color : currentSkin.busyColor)
-                  : "var(--card-soft, var(--card))";
-                const borderStyle = status === "busy" ? "transparent" : "var(--ink)";
-                const textColor = status === "busy" ? "#fff" : "transparent";
-                return (
-                  <div
-                    key={`${c.key}-${hour}-${minute}`}
-                    className="heat-cell rounded-md flex items-center justify-center border-2"
-                    style={{
-                      background: bg,
-                      minHeight: cellHeight,
-                      borderColor: borderStyle,
-                      opacity: status === "busy" ? 1 : 0.55,
-                      touchAction: "none",
-                    }}
-                    onMouseDown={() => onCellDown(c.key, hour, minute)}
-                    onMouseEnter={() => onCellEnter(c.key, hour, minute)}
-                    onTouchStart={onTouchStart(c.key, hour, minute)}
-                    data-cell-coord={`${c.key}|${hour}|${minute}`}
-                    data-testid={`edit-cell-${c.key}-${hour}-${minute}`}
-                    title={status === "busy" ? `Busy${r ? " · " + r.label : ""}` : "Free"}
-                  >
-                    {r && status === "busy" && step >= 30 && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: textColor }}>
-                        {r.label.slice(0, 4)}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </Fragment>
-          ))}
-        </div>
+            ))}
+
+            {timeSlots.map(({ hour, minute }) => (
+              <Fragment key={`edit-${hour}-${minute}`}>
+                <div
+                  className={`text-[11px] font-semibold flex items-center justify-end pr-2 ${
+                    minute === 0 ? "text-slate-700" : "text-slate-400"
+                  }`}
+                >
+                  {minute === 0 ? timeLabel(hour, 0) : `:${String(minute).padStart(2, "0")}`}
+                </div>
+                {columns.map((c) => {
+                  const status = currentStatus(c.key, hour, minute);
+                  const reason = currentReason(c.key, hour, minute);
+                  const r = reason ? reasonMap[reason] : null;
+                  const bg = status === "busy"
+                    ? (r ? r.color : currentSkin.busyColor)
+                    : "var(--card-soft, var(--card))";
+                  const borderStyle = status === "busy" ? "transparent" : "var(--ink)";
+                  const textColor = status === "busy" ? "#fff" : "transparent";
+                  return (
+                    <div
+                      key={`${c.key}-${hour}-${minute}`}
+                      className="heat-cell rounded-md flex items-center justify-center border-2"
+                      style={{
+                        background: bg,
+                        minHeight: cellHeight,
+                        borderColor: borderStyle,
+                        opacity: status === "busy" ? 1 : 0.55,
+                        touchAction: "none",
+                      }}
+                      onMouseDown={() => onCellDown(c.key, hour, minute)}
+                      onMouseEnter={() => onCellEnter(c.key, hour, minute)}
+                      onTouchStart={onTouchStart(c.key, hour, minute)}
+                      data-cell-coord={`${c.key}|${hour}|${minute}`}
+                      data-testid={`edit-cell-${c.key}-${hour}-${minute}`}
+                      title={status === "busy" ? `Busy${r ? " · " + r.label : ""}` : "Free"}
+                    >
+                      {r && status === "busy" && step >= 30 && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: textColor }}>
+                          {r.label.slice(0, 4)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-4 text-xs text-slate-600 flex items-center gap-3 flex-wrap">

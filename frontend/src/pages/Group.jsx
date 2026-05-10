@@ -1124,6 +1124,7 @@ export default function GroupPage() {
                       members: g.members.map((m) => (m.id === me.id ? { ...m, slots } : m)),
                     }));
                   }}
+                  orientation="days-rows"
                 />
               ) : (
                 <HeatmapGrid

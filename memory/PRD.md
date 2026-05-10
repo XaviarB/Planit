@@ -15,6 +15,11 @@ The user iteratively requests UI/UX improvements to a no-account group availabil
 - Drawers anchored to the FAB orb: AstralDrawer (remix/history), MyToolsDrawer (busy/toolkit)
 
 ## Implementation log
+- **Feb 2026** — Mobile editor transposed (matches the heatmap):
+  - `AvailabilityEditor.jsx` — new `orientation` prop (defaults to `"hours-rows"` for desktop). When set to `"days-rows"`, the editable grid renders 7 day rows × 24 hour columns with the same compact hour-strip labels (every 3rd hour) used by `HeatmapGrid`. Tap & drag painting still works via the existing `data-cell-coord` touchmove handler — only the visual layout flipped.
+  - `Group.jsx` (mobile branch) — passes `orientation="days-rows"` to the editor too, so My Schedule tab matches the Plan-tab heatmap shape.
+  - Smoke-tested at 390×844: 168 editable cells, `data-orientation="days-rows"` confirmed.
+
 - **Feb 2026** — Mobile heatmap transposed (days-rows orientation):
   - `HeatmapGrid.jsx` — new `orientation` prop ("hours-rows" default | "days-rows"). Days-rows mode swaps axes so each day is a horizontal lane and hours scroll left-to-right. Compact hour labels show every 3rd hour (`12a · 3a · 6a · 9a · 12p · 3p · 6p · 9p`) so 24 cells fit on a phone. Tooltips repositioned with the new tip-anchor logic.
   - `Group.jsx` (mobile branch) — passes `orientation="days-rows"` to the heatmap. Desktop layout unchanged (still hours-rows / days-cols).

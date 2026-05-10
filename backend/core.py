@@ -39,7 +39,6 @@ DEFAULT_REASONS = [
     {"label": "Work",  "color": "#7FB3D5"},
     {"label": "Class", "color": "#C39BD3"},
     {"label": "Gym",   "color": "#F1948A"},
-    {"label": "Sleep", "color": "#5D6D7E"},
 ]
 
 DEFAULT_HEAT_COLORS = [

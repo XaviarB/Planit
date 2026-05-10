@@ -224,7 +224,8 @@ export default function HeatmapGrid({
         </div>
         {transposed ? (
           /* Mobile: 5-cell gradient inline with the heading — only thing
-             above the heatmap, no separate legend card. */
+             above the heatmap, no separate legend card. Cells are sized
+             tightly so the row never clips on narrow phones (≤375px). */
           <div
             className="flex items-center gap-1 shrink-0"
             aria-hidden="true"
@@ -235,7 +236,7 @@ export default function HeatmapGrid({
                 <span
                   key={i}
                   data-testid={`legend-strip-${i}`}
-                  className="w-5 h-5 rounded-md border-2 shrink-0"
+                  className="w-4 h-4 rounded-md border-2 shrink-0"
                   style={{ borderColor: "var(--ink)", background: stop }}
                 />
               )

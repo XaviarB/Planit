@@ -173,12 +173,18 @@ function Chip({ active, onClick, children, testId }) {
       type="button"
       onClick={onClick}
       data-testid={testId}
+      data-active={active ? "true" : "false"}
       className="text-xs sm:text-sm font-bold rounded-full px-3 py-1.5 border-2 transition"
       style={{
-        background: active ? "var(--ink)" : "var(--card)",
-        color: active ? "var(--btn-fg)" : "var(--ink)",
+        // Active chips use the pastel-mint pill look (matches `neo-btn.pastel`)
+        // instead of the harsh dark-ink + white combo, which became illegible
+        // in dark mode (light ink + white text). Pastel + dark text reads well
+        // in both themes and feels on-brand.
+        background: active ? "var(--pastel-mint)" : "var(--card)",
+        color: "var(--ink)",
         borderColor: "var(--ink)",
         boxShadow: active ? "2px 2px 0 0 var(--ink)" : "none",
+        fontWeight: active ? 800 : 700,
       }}
     >
       {children}

@@ -21,13 +21,14 @@ import GroupMenu from "../components/GroupMenu";
 import MembersSchedule from "../components/MembersSchedule";
 import ShareMenu from "../components/ShareMenu";
 import { HangoutsList } from "../components/Hangouts";
-import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Settings, Sparkles, MapPin, Smartphone } from "lucide-react";
+import { Copy, Share2, Users, ArrowLeft, Plus, Edit3, Check, X, ChevronLeft, ChevronRight, Settings, Sparkles, MapPin, Smartphone, MessageSquare, UserPlus } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import BottomTabBar from "../components/BottomTabBar";
 import AstralHub from "../components/AstralHub";
 import SuggestMeeting from "../components/SuggestMeeting";
 import FloatingLauncher from "../components/FloatingLauncher";
 import LayoutToggle, { getLayoutMode } from "../components/LayoutToggle";
+import FeedbackModal from "../components/FeedbackModal";
 
 /**
  * useIsDesktop — viewport breakpoint hook with manual-override support.
@@ -99,6 +100,7 @@ export default function GroupPage() {
   const [editMode, setEditMode] = useState(false);
   const [astralOpen, setAstralOpen] = useState(false); // controls AstralHub on mobile
   const [suggestOpen, setSuggestOpen] = useState(false); // controls SuggestMeeting modal on mobile
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const isDesktop = useIsDesktop(); // ≥1024px → render the original horizontal layout
   const [rangeStart, setRangeStart] = useState(persisted.rangeStart || isoToday());
   const [rangeEnd, setRangeEnd] = useState(persisted.rangeEnd || isoPlus(isoToday(), 6));
@@ -468,6 +470,21 @@ export default function GroupPage() {
                   ↻ {group.recurrence_kind}
                 </span>
               )}
+              {/* Feedback button — sits inline with GroupMenu + recurrence
+                  badge so it's always accessible from the page chrome,
+                  regardless of layout (desktop vs mobile vs sub-tab). */}
+              <button
+                type="button"
+                onClick={() => setFeedbackOpen(true)}
+                title="Send feedback"
+                aria-label="Send feedback"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-slate-900 bg-[var(--pastel-mint)] text-xs font-bold font-heading uppercase tracking-wider hover:translate-y-[-1px] active:translate-y-0 active:shadow-none shadow-[2px_2px_0_0_rgba(15,23,42,1)] transition shrink-0"
+                data-testid="feedback-open-btn"
+                style={{ color: "var(--ink)" }}
+              >
+                <MessageSquare className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <span className="hidden sm:inline">Feedback</span>
+              </button>
             </div>
           </div>
 
@@ -933,6 +950,17 @@ export default function GroupPage() {
                 Editing
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              title="Send feedback"
+              aria-label="Send feedback"
+              className="w-10 h-10 rounded-2xl border-2 border-slate-900 grid place-items-center hover:translate-y-[-1px] active:translate-y-0 active:shadow-none shadow-[2px_2px_0_0_rgba(15,23,42,1)] transition shrink-0"
+              style={{ background: "var(--pastel-mint)", color: "var(--ink)" }}
+              data-testid="feedback-open-btn-mobile"
+            >
+              <MessageSquare className="w-4 h-4" strokeWidth={2.5} />
+            </button>
             <ThemeToggle />
           </div>
         </header>
@@ -1220,6 +1248,56 @@ export default function GroupPage() {
                 </div>
               </div>
 
+              {/* Solo-member nudge — when you're the only one in the group,
+                  surface an Invite friends card right inside the Crew tab so
+                  you don't have to dig into Settings. Disappears once anyone
+                  else joins. */}
+              {group.members.length === 1 && (
+                <div className="pop-in" style={{ animationDelay: "60ms" }}>
+                  <div
+                    className="neo-card p-5"
+                    style={{ background: "var(--pastel-peach)" }}
+                    data-testid="crew-invite-card"
+                  >
+                    <div className="flex items-start gap-3 mb-3">
+                      <div
+                        className="w-10 h-10 rounded-xl border-2 border-slate-900 grid place-items-center shrink-0"
+                        style={{ background: "var(--pastel-mint)" }}
+                        aria-hidden="true"
+                      >
+                        <UserPlus className="w-5 h-5" strokeWidth={2.5} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-heading font-black text-base leading-tight">
+                          Bring your crew
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>
+                          Planit shines once at least 2 people log busy times. Share
+                          your group code or link below to get started.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <ShareMenu
+                        url={`${window.location.origin}/g/${code}`}
+                        groupName={group.name}
+                      />
+                      <button
+                        className="neo-btn ghost flex items-center justify-between gap-2 text-sm w-full"
+                        onClick={onCopyCode}
+                        data-testid="crew-copy-code-btn"
+                      >
+                        <span className="label-caps">Code</span>
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono tracking-widest font-bold">{group.code}</span>
+                          <Copy className="w-4 h-4" />
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Tip card — points to Plan for heatmap context */}
               <button
                 className="neo-card p-4 w-full text-left flex items-center gap-3 hover:scale-[1.01] transition"
@@ -1441,6 +1519,11 @@ export default function GroupPage() {
           setSuggestOpen(false);
           setAstralOpen(true);
         }}
+      />
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        groupCode={group?.code}
       />
     </div>
   );
@@ -1807,12 +1890,14 @@ function Chip({ active, onClick, children, testId }) {
       type="button"
       onClick={onClick}
       data-testid={testId}
+      data-active={active ? "true" : "false"}
       className="text-xs sm:text-sm font-bold rounded-full px-3 py-1.5 border-2 transition"
       style={{
-        background: active ? "var(--ink)" : "var(--card)",
-        color: active ? "var(--btn-fg)" : "var(--ink)",
+        background: active ? "var(--pastel-mint)" : "var(--card)",
+        color: "var(--ink)",
         borderColor: "var(--ink)",
         boxShadow: active ? "2px 2px 0 0 var(--ink)" : "none",
+        fontWeight: active ? 800 : 700,
       }}
     >
       {children}

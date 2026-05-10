@@ -47,6 +47,12 @@ export const deleteGroup = (code) =>
 export const leaveGroup = (code, member_id) =>
   api.delete(`/groups/${code}/members/${member_id}`).then((r) => r.data);
 
+// ---------- Feedback ----------
+// Lightweight user feedback collector. All fields optional; backend requires
+// at least one of liked / disliked / wished to be non-empty.
+export const submitFeedback = (payload) =>
+  api.post(`/feedback`, payload).then((r) => r.data);
+
 // ---------- Customization (Phase 5) ----------
 
 // Group-wide visual identity. Anyone in the group can edit. Returns

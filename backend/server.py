@@ -39,7 +39,6 @@ DEFAULT_REASONS = [
     {"label": "Work",   "color": "#7FB3D5"},
     {"label": "Class",  "color": "#C39BD3"},
     {"label": "Gym",    "color": "#F1948A"},
-    {"label": "Sleep",  "color": "#5D6D7E"},
 ]
 
 
@@ -1511,6 +1510,60 @@ def random_member_color(idx: int) -> str:
         "#F1C40F", "#E91E63", "#00BCD4", "#8E44AD",
     ]
     return palette[idx % len(palette)]
+
+
+# ---------- Feedback ----------
+# Lightweight user feedback collector. Posts land in a single `feedback`
+# collection (no per-group scoping required) so devs can review centrally.
+
+class FeedbackIn(BaseModel):
+    name: Optional[str] = None
+    liked: Optional[str] = None
+    disliked: Optional[str] = None
+    wished: Optional[str] = None
+    group_code: Optional[str] = None
+
+
+@api_router.post("/feedback")
+async def submit_feedback(payload: FeedbackIn):
+    # Require at least one substantive field so the endpoint can't be hit
+    # blindly. Empty/whitespace counts as missing.
+    def _clean(v: Optional[str]) -> str:
+        return (v or "").strip()
+    liked = _clean(payload.liked)
+    disliked = _clean(payload.disliked)
+    wished = _clean(payload.wished)
+    if not (liked or disliked or wished):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of liked / disliked / wished must be provided.",
+        )
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": _clean(payload.name)[:80] or None,
+        "liked": liked[:2000] or None,
+        "disliked": disliked[:2000] or None,
+        "wished": wished[:2000] or None,
+        "group_code": (payload.group_code or "").upper()[:8] or None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.feedback.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "id": doc["id"]}
+
+
+@app.on_event("startup")
+async def migrate_remove_default_sleep():
+    """One-time data hygiene: strip the original default "Sleep" reason from
+    every existing group. We match the exact factory-default label+color so
+    a user who manually re-added a custom "Sleep" reason is untouched."""
+    try:
+        await db.groups.update_many(
+            {"reasons.label": "Sleep"},
+            {"$pull": {"reasons": {"label": "Sleep", "color": "#5D6D7E"}}},
+        )
+    except Exception as e:  # noqa: BLE001 — best-effort migration
+        logging.getLogger(__name__).warning("Sleep migration skipped: %s", e)
 
 
 app.include_router(api_router)

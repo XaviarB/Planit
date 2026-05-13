@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { buildTimeSlots, timeLabel, heatColor, withSlotMap, memberStatusAt, dateToDayIdx } from "../lib/schedule";
 
 /**
@@ -212,165 +212,6 @@ export default function HeatmapGrid({
     return heatColor(cell.free.length, total, heatColors);
   };
 
-  // ── Horizontal scroll slider (pill/bubble shaped) ────────────────
-  // Tracks the heatmap's horizontal scroll position so users can drag a
-  // pill-shaped thumb across the bottom to see the rest of the heatmap
-  // that's hidden off-screen (common on mobile where 24 hour columns
-  // overflow, or on wide week views).
-  const scrollRef = useRef(null);
-  const trackRef = useRef(null);
-  const draggingRef = useRef(false);
-  const [scrollState, setScrollState] = useState({
-    hasOverflow: false,
-    ratio: 1, // visible / total
-    progress: 0, // 0..1 of scrollLeft / maxScroll
-  });
-
-  const measureScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollWidth, clientWidth, scrollLeft } = el;
-    const hasOverflow = scrollWidth > clientWidth + 1;
-    const ratio = hasOverflow ? clientWidth / scrollWidth : 1;
-    const maxScroll = scrollWidth - clientWidth;
-    const progress = maxScroll > 0 ? scrollLeft / maxScroll : 0;
-    setScrollState((prev) => {
-      if (
-        prev.hasOverflow === hasOverflow &&
-        Math.abs(prev.ratio - ratio) < 0.001 &&
-        Math.abs(prev.progress - progress) < 0.001
-      ) {
-        return prev;
-      }
-      return { hasOverflow, ratio, progress };
-    });
-  }, []);
-
-  useEffect(() => {
-    measureScroll();
-    const el = scrollRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", measureScroll, { passive: true });
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measureScroll) : null;
-    if (ro) {
-      ro.observe(el);
-      if (el.firstElementChild) ro.observe(el.firstElementChild);
-    }
-    window.addEventListener("resize", measureScroll);
-    return () => {
-      el.removeEventListener("scroll", measureScroll);
-      if (ro) ro.disconnect();
-      window.removeEventListener("resize", measureScroll);
-    };
-  }, [measureScroll, orientation, columns.length, timeSlots.length, minuteStep]);
-
-  // Min thumb width so the bubble stays grabbable on huge overflows.
-  const MIN_THUMB_PCT = 14;
-  const thumbPct = Math.max(scrollState.ratio * 100, MIN_THUMB_PCT);
-  const thumbLeftPct = scrollState.progress * (100 - thumbPct);
-
-  const applyPointerToScroll = (clientX) => {
-    const track = trackRef.current;
-    const el = scrollRef.current;
-    if (!track || !el) return;
-    const rect = track.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const ratio = Math.min(1, el.clientWidth / Math.max(1, el.scrollWidth));
-    const tPct = Math.max(ratio * 100, MIN_THUMB_PCT);
-    const thumbWidth = (tPct / 100) * rect.width;
-    const usable = Math.max(1, rect.width - thumbWidth);
-    let x = clientX - rect.left - thumbWidth / 2;
-    x = Math.max(0, Math.min(usable, x));
-    const progress = x / usable;
-    const maxScroll = el.scrollWidth - el.clientWidth;
-    el.scrollLeft = progress * maxScroll;
-  };
-
-  const onTrackPointerDown = (e) => {
-    draggingRef.current = true;
-    try {
-      trackRef.current?.setPointerCapture?.(e.pointerId);
-    } catch (_) {}
-    applyPointerToScroll(e.clientX);
-  };
-  const onTrackPointerMove = (e) => {
-    if (!draggingRef.current) return;
-    applyPointerToScroll(e.clientX);
-  };
-  const onTrackPointerUp = (e) => {
-    draggingRef.current = false;
-    try {
-      trackRef.current?.releasePointerCapture?.(e.pointerId);
-    } catch (_) {}
-  };
-
-  const renderScrollSlider = () => {
-    if (!scrollState.hasOverflow) return null;
-    return (
-      <div className="mt-3 sm:mt-4 px-0.5" data-testid="heatmap-scroll-slider">
-        <div
-          ref={trackRef}
-          role="slider"
-          aria-label="Scroll heatmap horizontally"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(scrollState.progress * 100)}
-          tabIndex={0}
-          className="relative h-6 rounded-full border-2 cursor-pointer select-none touch-none"
-          style={{
-            borderColor: "var(--ink)",
-            background: "var(--pastel-mint)",
-            boxShadow: "2px 2px 0 0 var(--ink)",
-          }}
-          onPointerDown={onTrackPointerDown}
-          onPointerMove={onTrackPointerMove}
-          onPointerUp={onTrackPointerUp}
-          onPointerCancel={onTrackPointerUp}
-          onKeyDown={(e) => {
-            const el = scrollRef.current;
-            if (!el) return;
-            const step = Math.max(40, el.clientWidth * 0.2);
-            if (e.key === "ArrowLeft") {
-              el.scrollLeft = Math.max(0, el.scrollLeft - step);
-              e.preventDefault();
-            } else if (e.key === "ArrowRight") {
-              el.scrollLeft = Math.min(el.scrollWidth - el.clientWidth, el.scrollLeft + step);
-              e.preventDefault();
-            } else if (e.key === "Home") {
-              el.scrollLeft = 0;
-              e.preventDefault();
-            } else if (e.key === "End") {
-              el.scrollLeft = el.scrollWidth - el.clientWidth;
-              e.preventDefault();
-            }
-          }}
-          data-testid="heatmap-scroll-slider-track"
-        >
-          <div
-            className="absolute top-1/2 -translate-y-1/2 h-4 rounded-full border-2 flex items-center justify-center"
-            style={{
-              borderColor: "var(--ink)",
-              background: "var(--ink)",
-              width: `${thumbPct}%`,
-              left: `${thumbLeftPct}%`,
-              boxShadow: "1px 1px 0 0 var(--ink)",
-              transition: draggingRef.current ? "none" : "left 80ms linear",
-            }}
-            data-testid="heatmap-scroll-slider-thumb"
-          >
-            {/* Grip dots — three little circles, same vocabulary as the
-                rest of the brutalist UI bubbles. */}
-            <span className="flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full" style={{ background: "var(--pastel-mint)" }} />
-              <span className="w-1 h-1 rounded-full" style={{ background: "var(--pastel-mint)" }} />
-              <span className="w-1 h-1 rounded-full" style={{ background: "var(--pastel-mint)" }} />
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
 
   return (
     <div className="neo-card p-4 sm:p-6" data-testid="heatmap" data-orientation={orientation}>
@@ -413,8 +254,7 @@ export default function HeatmapGrid({
 
       {transposed ? (
         // ── Transposed: days on rows, hours on columns ──────────────────
-        <>
-        <div className="scroll-x" ref={scrollRef}>
+        <div className="scroll-x">
           <div
             className="grid gap-1 min-w-fit"
             style={{
@@ -489,12 +329,9 @@ export default function HeatmapGrid({
             ))}
           </div>
         </div>
-        {renderScrollSlider()}
-        </>
       ) : (
         // ── Default: hours on rows, days on columns ─────────────────────
-        <>
-        <div className="scroll-x" ref={scrollRef}>
+        <div className="scroll-x">
           <div
             className="grid gap-1 min-w-fit"
             style={{
@@ -554,8 +391,6 @@ export default function HeatmapGrid({
             ))}
           </div>
         </div>
-        {renderScrollSlider()}
-        </>
       )}
     </div>
   );

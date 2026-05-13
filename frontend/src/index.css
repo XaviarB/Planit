@@ -569,16 +569,31 @@ html:not(.dark) .gradient-text {
 /* hide scrollbar nicely */
 .scroll-x {
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: thin;
     scrollbar-color: var(--ink) transparent;
     -webkit-overflow-scrolling: touch;
+    /* Always reserve room for the (static) horizontal scrollbar so the
+       layout doesn't jump when content overflows, and so the thin
+       bottom slider is always visible — even on macOS where native
+       scrollbars auto-hide otherwise. */
+    scrollbar-gutter: stable;
 }
 .scroll-x::-webkit-scrollbar {
     height: 6px;
+    width: 0; /* no vertical scrollbar */
+    -webkit-appearance: none;
+}
+.scroll-x::-webkit-scrollbar:vertical {
+    display: none;
+    width: 0;
 }
 .scroll-x::-webkit-scrollbar-thumb {
     background: var(--ink);
     border-radius: 999px;
+    /* Keep the thumb visible at rest (counteracts WebKit's overlay
+       auto-hide so the slider stays static at the bottom). */
+    min-width: 24px;
 }
 .scroll-x::-webkit-scrollbar-track {
     background: transparent;

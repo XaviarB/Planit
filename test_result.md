@@ -1093,6 +1093,58 @@ frontend:
           All persona override scenarios working correctly. Shallow merge logic validated.
           Gemini API calls completed in 10-25s range.
 
+  - task: "Mobile heatmap vertical fill (flex-1 expansion)"
+    implemented: true
+    working: false
+    file: "frontend/src/components/HeatmapGrid.jsx, frontend/src/pages/Group.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Added minHeight: calc(100dvh - 460px) and flex-1 to heatmap card when transposed
+          (mobile mode). Grid rows set to minmax(45px, 1fr) to allow vertical expansion.
+          Expected heatmap height ~500-600px on 390x844 viewport.
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ FAILED - Mobile heatmap vertical fill NOT working as expected
+          
+          TESTED ON: Group J2HLBP, viewport 390x844 (iPhone 14)
+          
+          MEASUREMENTS:
+          - Heatmap clientHeight: 426px (expected: 500-650px) ❌
+          - Heatmap minHeight: 384px (calc(100dvh - 460px) = 844 - 460 = 384px)
+          - Heatmap flex: 1 1 0% (flex-1 applied correctly) ✓
+          - Cell clientHeight: 43px (expected: >= 45px) ❌
+          - Distance from heatmap bottom to shell bottom: 128px (expected: 112-140px) ✓
+          
+          ROOT CAUSE:
+          The heatmap has the correct CSS properties (minHeight: 384px, flex-1), but it's
+          only expanding to 426px (42px above minHeight). The grid template rows are set to
+          `minmax(45px, 1fr)`, but cells are measuring 43px (likely due to gaps/borders).
+          
+          The heatmap is NOT expanding to fill available vertical space as expected. The
+          flex-1 is not forcing it beyond its natural content height (7 rows × ~43px + padding).
+          
+          EXPECTED vs ACTUAL:
+          - Expected heatmap height: 500-650px
+          - Actual heatmap height: 426px
+          - Gap: 74-224px SHORT
+          
+          DESKTOP REGRESSION CHECK:
+          ✓ Desktop (1440x900) orientation: hours-rows (correct)
+          ✓ Desktop cell height: 30px (expected ~32px, within range)
+          
+          RECOMMENDATION:
+          The minHeight calculation needs adjustment. Current offset is 460px, which leaves
+          only 384px for the heatmap. To achieve 500-600px heatmap height, the offset should
+          be reduced to ~244-344px. This requires either:
+          1. Reducing the space consumed by elements above the heatmap
+          2. Adjusting the minHeight calculation to be more aggressive
+          3. Ensuring the parent flex container has enough height to distribute
   - task: "Heatmap horizontal scroll slider (bottom pill slider)"
     implemented: true
     working: true
@@ -1783,3 +1835,61 @@ agent_communication:
       - Location chain: request → override → group base
       
       No issues found. Both endpoints production-ready.
+
+
+  - agent: "testing"
+    message: |
+      ❌ MOBILE HEATMAP VERTICAL FILL - FAILED
+      
+      Re-tested mobile heatmap vertical fill on group J2HLBP with viewport 390x844 (iPhone 14).
+      
+      **CRITICAL ISSUE:**
+      The heatmap is NOT expanding to fill vertical space as expected. Current height is
+      426px, but the review request expected ~500-600px.
+      
+      **DETAILED MEASUREMENTS:**
+      
+      MOBILE (390x844):
+      - Heatmap clientHeight: 426px ❌ (expected: 500-650px)
+      - Heatmap minHeight: 384px (calc(100dvh - 460px))
+      - Heatmap flex: 1 1 0% (flex-1 applied correctly)
+      - Heatmap flexGrow: 1 ✓
+      - Cell clientHeight: 43px ❌ (expected: >= 45px)
+      - Distance from heatmap bottom to shell bottom: 128px ✓ (expected: 112-140px)
+      - Orientation: days-rows ✓
+      
+      DESKTOP (1440x900):
+      - Orientation: hours-rows ✓
+      - Cell height: 30px ✓ (expected ~32px)
+      
+      **ROOT CAUSE:**
+      The heatmap has correct CSS (minHeight: 384px, flex-1), but it's only expanding to
+      426px (42px above minHeight). The grid template rows are `minmax(45px, 1fr)`, but
+      cells measure 43px (likely due to gaps/borders reducing the track size).
+      
+      The flex-1 is NOT forcing the heatmap to expand beyond its natural content height
+      (7 rows × ~43px + padding = ~426px). This suggests:
+      1. The parent flex container doesn't have enough extra space to distribute
+      2. OR the minHeight (384px) is too small to force the desired expansion
+      
+      **EXPECTED vs ACTUAL:**
+      - Expected: 500-650px heatmap height
+      - Actual: 426px heatmap height
+      - Shortfall: 74-224px
+      
+      **RECOMMENDATION:**
+      To achieve 500-600px heatmap height on 390x844 viewport, the minHeight calculation
+      needs adjustment. Current: calc(100dvh - 460px) = 384px. To get 500-600px, need:
+      calc(100dvh - 244px) to calc(100dvh - 344px).
+      
+      This requires reducing the offset from 460px to ~244-344px by either:
+      1. Reducing space consumed by elements above heatmap (sub-tabs, week nav, quick stats)
+      2. Adjusting the minHeight calculation to be more aggressive
+      3. Ensuring parent flex container has sufficient height for flex-1 to expand into
+      
+      The current implementation has the right approach (minHeight + flex-1) but the
+      minHeight value is too conservative. The 460px offset accounts for too much space
+      above/below the heatmap.
+      
+      Group tested: J2HLBP (2 members: Alice, Bob)
+      Screenshots: mobile-heatmap-final.png, desktop-heatmap-final.png

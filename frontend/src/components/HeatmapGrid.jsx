@@ -214,7 +214,27 @@ export default function HeatmapGrid({
 
 
   return (
-    <div className={`neo-card p-4 sm:p-6 ${transposed ? "flex flex-col flex-1 min-h-0" : ""}`} data-testid="heatmap" data-orientation={orientation}>
+    <div
+      className={`neo-card p-4 sm:p-6 ${transposed ? "flex flex-col flex-1 min-h-0" : ""}`}
+      style={
+        transposed
+          ? {
+              // Mobile-only: force the heatmap card to occupy most of the
+              // remaining viewport height so it visually dominates the
+              // screen and the day rows scale up (the `minmax(45px, 1fr)`
+              // rows expand into the extra height granted here). The
+              // subtracted offset is the rough sum of everything above
+              // the heatmap on mobile (sticky app-bar ~72, sub-tabs ~52,
+              // quick-stats ~130, space-y-4 gaps ~48, week-nav buffer
+              // ~30) plus the `with-tabbar-pad` bottom (112) and the
+              // requested 16px bottom breathing room.
+              minHeight: "calc(100dvh - 460px)",
+            }
+          : undefined
+      }
+      data-testid="heatmap"
+      data-orientation={orientation}
+    >
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="label-caps shrink-0">
           {compareCount >= 2

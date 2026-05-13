@@ -672,7 +672,7 @@ frontend:
           - Created test hangout via API (POST /api/groups/N7UVGL/hangouts) ✓
           - HangoutsList visible and expandable ✓
           - Hangout row found with download icon (data-testid="hangout-ics-{id}") ✓
-          - Download icon href: https://all-in-one-editor-13.preview.emergentagent.com/api/groups/N7UVGL/hangouts/{id}/event.ics ✓
+          - Download icon href: https://slider-preview-2.preview.emergentagent.com/api/groups/N7UVGL/hangouts/{id}/event.ics ✓
           - href ends with '/event.ics' ✓
           - href has correct path structure: /api/groups/{code}/hangouts/{hid}/event.ics ✓
           - Icon is an anchor tag with target="_blank" and rel="noreferrer" ✓
@@ -1093,10 +1093,64 @@ frontend:
           All persona override scenarios working correctly. Shallow merge logic validated.
           Gemini API calls completed in 10-25s range.
 
+  - task: "Heatmap horizontal scroll slider (bottom pill slider)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/HeatmapGrid.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Added bottom horizontal scroll slider for the heatmap. Pill-shaped slider with
+          pastel mint track and dark thumb. Only appears when content overflows horizontally
+          (common on mobile with 24 hour columns in transposed mode). Supports dragging thumb,
+          clicking track to jump-scroll, and tracks heatmap scroll position. Uses pointer events
+          with setPointerCapture for reliable drag handling. Testids: heatmap-scroll-slider,
+          heatmap-scroll-slider-track, heatmap-scroll-slider-thumb.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All heatmap scroll slider functionality working perfectly:
+          
+          DESKTOP (1920x800):
+          - Heatmap orientation: hours-rows (default)
+          - Slider NOT visible (no horizontal overflow)
+          
+          MOBILE (390x800):
+          - Heatmap orientation: days-rows (transposed mode) ✓
+          - Slider visible at bottom of heatmap ✓
+          - Slider components present: track, thumb with grip dots ✓
+          
+          DRAG FUNCTIONALITY:
+          - Drag thumb RIGHT: scrollLeft increased from 0 to 215 ✓
+          - Drag thumb LEFT: scrollLeft decreased from 215 to 108 ✓
+          - Thumb position updates during drag ✓
+          
+          CLICK TRACK FUNCTIONALITY:
+          - Click track at 90% position: scrollLeft jumped from 0 to 354 ✓
+          - Jump-scroll working correctly ✓
+          
+          SCROLL TRACKING:
+          - Direct heatmap scroll moves thumb proportionally ✓
+          - Thumb position at start: x=36 ✓
+          - Thumb position at middle: x=118 ✓
+          - Thumb position at end: x=200 ✓
+          
+          STYLING:
+          - Track: rounded-full (9999px), pastel mint bg (rgb(209,242,235)), 2px border, box-shadow ✓
+          - Thumb: rounded-full (9999px), dark bg (rgb(15,23,42)), 2px border, box-shadow ✓
+          - Pill/bubble shape matches site design aesthetic ✓
+          - Three grip dots visible in thumb center ✓
+          
+          All acceptance criteria met. Feature working as designed with no issues.
+
 metadata:
   created_by: "main_agent"
-  version: "1.4"
-  test_sequence: 5
+  version: "1.5"
+  test_sequence: 6
   run_ui: false
 
 test_plan:
@@ -1106,6 +1160,29 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "testing"
+    message: |
+      ✅ HEATMAP SCROLL SLIDER - ALL TESTS PASSED
+      
+      Tested the new bottom horizontal scroll slider for the heatmap on mobile viewport.
+      
+      **TEST RESULTS:**
+      ✅ Slider appears on mobile (390x800) with transposed heatmap (days-rows)
+      ✅ Slider NOT visible on desktop (1920x800) - no overflow
+      ✅ Dragging slider thumb scrolls the heatmap (left/right)
+      ✅ Clicking slider track jumps scroll position
+      ✅ Direct heatmap scroll moves slider thumb proportionally
+      ✅ Slider has correct pill/bubble styling (rounded-full, pastel mint track, dark thumb)
+      ✅ All testids present: heatmap-scroll-slider, heatmap-scroll-slider-track, heatmap-scroll-slider-thumb
+      
+      **VISUAL CONFIRMATION:**
+      - Slider visible at bottom of heatmap card on mobile
+      - Pill-shaped track with pastel mint background
+      - Dark pill-shaped thumb with three grip dots
+      - Proper box-shadow for brutalist design aesthetic
+      - Slider only appears when content overflows horizontally
+      
+      No issues found. Feature is production-ready.
   - agent: "main"
     message: |
       Phase-6 customise overhaul shipped. Backend changes:

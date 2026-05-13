@@ -333,6 +333,57 @@ backend:
           6. Error handling: 404 when group code doesn't exist, 404 when hangout id doesn't exist
           Created test group, created hangout with start/end times, verified tentative state, locked
           hangout via PUT, re-fetched .ics and verified confirmed state. All validations passed.
+  - task: "Feedback endpoint (POST /api/feedback)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ VERIFIED - All 5 feedback endpoint scenarios passed:
+          
+          TEST 1: POST /api/feedback with all fields populated
+          - Payload: {name: "QA Test Bot", liked: "...", disliked: "...", wished: "...", group_code: "QA1234"}
+          - Status: 200 OK
+          - Response: {"ok": true, "id": "faa41e4d-481e-4ab8-ad0c-944531093b11"}
+          - Response time: 0.188s (well within ~1 second target)
+          - Backend log: "Feedback email sent (resend_id=09c34d52-7cb9-41a6-9422-38a399798569, to=rojer.e973@gmail.com)"
+          
+          TEST 2: POST /api/feedback with all fields empty/whitespace
+          - Payload: {name: "", liked: "  ", disliked: null, wished: ""}
+          - Status: 400 Bad Request
+          - Response: {"detail": "At least one of liked / disliked / wished must be provided."}
+          - Validation working correctly
+          
+          TEST 3: POST /api/feedback with only "wished" field
+          - Payload: {wished: "Single-field test"}
+          - Status: 200 OK
+          - Response: {"ok": true, "id": "f89ca07c-f66b-45cc-9489-f64781540bcd"}
+          - Response time: 0.103s
+          - Backend log: "Feedback email sent (resend_id=461c809f-2ba7-485c-8c81-478553935575, to=rojer.e973@gmail.com)"
+          
+          TEST 4: MongoDB feedback collection verification
+          - Initial count: 2 documents
+          - Final count: 4 documents
+          - Delta: +2 documents (exactly as expected)
+          - Only successful POSTs (Test 1 and Test 3) added documents; failed POST (Test 2) did NOT add a document
+          
+          TEST 5: Response time verification
+          - Test 1 response time: 0.188s
+          - Test 3 response time: 0.103s
+          - Average response time: 0.145s
+          - Well within ~1 second target, confirming fire-and-forget email sending via asyncio.create_task
+          
+          BACKEND LOGS:
+          - Both successful POSTs triggered "Feedback email sent (resend_id=..., to=rojer.e973@gmail.com)" log lines
+          - No "Failed to send feedback email" errors for the test submissions
+          - Email sending is fire-and-forget and does not block the response
+          
+          All acceptance criteria met. Endpoint is production-ready.
 
 frontend:
   - task: "Floating Astral + Toolkit launcher (draggable FAB)"
@@ -1987,3 +2038,37 @@ agent_communication:
       The bigger heatmap fills the screen as intended per the review request.
       
       Screenshot: mobile-heatmap-retest-final.png
+
+
+  - agent: "testing"
+    message: |
+      ✅ FEEDBACK ENDPOINT TESTING COMPLETE - ALL TESTS PASSED
+      
+      Tested POST /api/feedback endpoint end-to-end with comprehensive test suite (5 tests total).
+      
+      **TEST RESULTS SUMMARY:**
+      
+      ✅ Test 1: POST with all fields populated → 200 OK, {ok: true, id: <uuid>}, 0.188s response time
+      ✅ Test 2: POST with all fields empty/whitespace → 400 Bad Request with proper validation message
+      ✅ Test 3: POST with only "wished" field → 200 OK, {ok: true, id: <uuid>}, 0.103s response time
+      ✅ Test 4: MongoDB feedback collection grew by exactly 2 documents (initial: 2, final: 4)
+      ✅ Test 5: Average response time 0.145s (well within ~1 second target)
+      
+      **BACKEND LOGS VERIFICATION:**
+      - Both successful POSTs (Test 1 and Test 3) triggered email sending within ~5 seconds
+      - Log lines found:
+        * "Feedback email sent (resend_id=09c34d52-7cb9-41a6-9422-38a399798569, to=rojer.e973@gmail.com)"
+        * "Feedback email sent (resend_id=461c809f-2ba7-485c-8c81-478553935575, to=rojer.e973@gmail.com)"
+      - No "Failed to send feedback email" errors for test submissions
+      - Fire-and-forget email sending via asyncio.create_task working correctly (does not block response)
+      
+      **KEY FINDINGS:**
+      - Validation working correctly: at least one of liked/disliked/wished must be provided
+      - Failed POST (Test 2) correctly did NOT add a document to MongoDB
+      - Response times are excellent (0.1-0.2s), confirming async email sending doesn't block
+      - Email integration with Resend working correctly (emails sent to rojer.e973@gmail.com)
+      - All HTTP status codes, response bodies, and MongoDB persistence working as specified
+      
+      **RESULTS: 5/5 tests passed (100%)**
+      
+      No issues found. Feedback endpoint is production-ready.

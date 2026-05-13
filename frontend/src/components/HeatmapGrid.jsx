@@ -281,9 +281,10 @@ export default function HeatmapGrid({
             style={{
               // Slim hour columns so 24 fit on a phone with horizontal scroll.
               gridTemplateColumns: `52px repeat(${timeSlots.length}, minmax(22px, 1fr))`,
-              // Day rows fill the available vertical space, with a 45px floor
-              // so cells stay chunky/tappable even on shorter viewports.
-              gridTemplateRows: `auto repeat(${columns.length}, minmax(45px, 1fr))`,
+              // Day rows fill the available vertical space, with a 48px
+              // floor so the rendered cell height (after the grid's 4px
+              // gap eats a sliver) still lands at the requested ~45px.
+              gridTemplateRows: `auto repeat(${columns.length}, minmax(48px, 1fr))`,
             }}
           >
             {/* Top-left blank */}
@@ -333,7 +334,7 @@ export default function HeatmapGrid({
                       className="heat-cell rounded-md relative"
                       style={{
                         background: bg,
-                        minHeight: 45,
+                        minHeight: 48,
                       }}
                       onMouseEnter={() => setHover({ ci, hi })}
                       onMouseLeave={() => setHover(null)}

@@ -456,6 +456,8 @@ html:not(.dark) .gradient-text {
     min-height: 100dvh;
     position: relative;
     background: var(--bg-base);
+    display: flex;
+    flex-direction: column;
     /* Soft "phone frame" inset on desktop only. */
 }
 @media (min-width: 768px) {

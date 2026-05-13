@@ -1070,12 +1070,12 @@ export default function GroupPage() {
             on each tab swap (slide-from-right) and on edit-mode entrance
             (slide-from-below — feels like an editing layer over Plan). */}
         <main
-          className={`px-4 py-4 space-y-4 ${editMode ? "tab-content-anim--up" : "tab-content-anim"}`}
+          className={`px-4 py-4 space-y-4 flex-1 min-h-0 flex flex-col ${editMode ? "tab-content-anim--up" : "tab-content-anim"}`}
           key={`tab-${mainTab}-${editMode ? "edit" : "view"}`}
         >
           {/* PLAN TAB — heatmap, edit availability, sub-tab segmented */}
           {mainTab === "plan" && (
-            <div className="space-y-4">
+            <div className="space-y-4 flex-1 min-h-0 flex flex-col">
               {/* Sub-tab segmented (Sync orbits | Crew schedule) — only when not editing */}
               {!editMode && (
                 <div

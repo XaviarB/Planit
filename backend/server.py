@@ -2,6 +2,8 @@ from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import asyncio
+import html as html_lib
 import os
 import logging
 import random
@@ -22,6 +24,17 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Resend (transactional email) — loaded after dotenv so RESEND_API_KEY is visible.
+# We only configure if the key is present; otherwise feedback simply doesn't email.
+try:
+    import resend  # noqa: E402
+    _RESEND_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+    if _RESEND_KEY:
+        resend.api_key = _RESEND_KEY
+except Exception as _e:  # noqa: BLE001
+    resend = None  # type: ignore
+    logging.getLogger(__name__).warning("Resend SDK not available: %s", _e)
 
 # Astral concierge — imported AFTER load_dotenv so the LLM key is visible.
 from astral import parse_busy_text, suggest_hangouts, draft_invite  # noqa: E402
@@ -1682,7 +1695,9 @@ async def list_my_memberships(user_token: str):
 
 # ---------- Feedback ----------
 # Lightweight user feedback collector. Posts land in a single `feedback`
-# collection (no per-group scoping required) so devs can review centrally.
+# collection (no per-group scoping required) so devs can review centrally,
+# and a best-effort transactional email is fired via Resend so the owner
+# gets each submission in their inbox without polling the DB.
 
 class FeedbackIn(BaseModel):
     name: Optional[str] = None
@@ -1690,6 +1705,110 @@ class FeedbackIn(BaseModel):
     disliked: Optional[str] = None
     wished: Optional[str] = None
     group_code: Optional[str] = None
+
+
+def _build_feedback_email_html(doc: Dict[str, Any]) -> str:
+    """Format a feedback submission as a clean, mostly-inline-styled HTML
+    email. Uses tables for layout to maximise client compatibility (Gmail,
+    Outlook, iOS Mail)."""
+    def _esc(v: Optional[str]) -> str:
+        return html_lib.escape(v) if v else ""
+
+    name = _esc(doc.get("name")) or "Anonymous"
+    group_code = _esc(doc.get("group_code")) or "—"
+    created_at = _esc(doc.get("created_at")) or ""
+    rows = []
+    for label, key, accent in (
+        ("Liked",    "liked",    "#34d399"),
+        ("Disliked", "disliked", "#f87171"),
+        ("Wished",   "wished",   "#a78bfa"),
+    ):
+        text = _esc(doc.get(key)) if doc.get(key) else None
+        if not text:
+            continue
+        # Preserve line breaks from the textarea.
+        text_html = text.replace("\n", "<br/>")
+        rows.append(
+            f"""
+            <tr>
+              <td style="padding:14px 18px;border-left:4px solid {accent};background:#f8fafc;border-radius:8px;">
+                <div style="font:600 11px/1 'Helvetica Neue',Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:6px;">{label}</div>
+                <div style="font:400 14px/1.55 'Helvetica Neue',Arial,sans-serif;color:#0f172a;white-space:pre-wrap;">{text_html}</div>
+              </td>
+            </tr>
+            <tr><td style="height:10px;line-height:10px;font-size:0;">&nbsp;</td></tr>
+            """
+        )
+    rows_html = "".join(rows) or (
+        '<tr><td style="padding:14px 18px;color:#64748b;font:400 14px/1.4 \'Helvetica Neue\',Arial,sans-serif;">(empty submission)</td></tr>'
+    )
+
+    return f"""
+    <div style="background:#eef2ff;padding:24px 12px;font-family:'Helvetica Neue',Arial,sans-serif;">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border:2px solid #0f172a;border-radius:16px;box-shadow:4px 4px 0 0 #0f172a;">
+        <tr>
+          <td style="padding:20px 22px 4px 22px;">
+            <div style="font:800 11px/1 'Helvetica Neue',Arial,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#6366f1;">Planit · New Feedback</div>
+            <h1 style="margin:8px 0 0 0;font:800 22px/1.25 'Helvetica Neue',Arial,sans-serif;color:#0f172a;">From {name}</h1>
+            <div style="margin-top:6px;font:500 12px/1.4 'Helvetica Neue',Arial,sans-serif;color:#475569;">
+              Group code: <strong style="color:#0f172a;">{group_code}</strong> · <span style="color:#94a3b8;">{created_at}</span>
+            </div>
+          </td>
+        </tr>
+        <tr><td style="padding:14px 18px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+            {rows_html}
+          </table>
+        </td></tr>
+        <tr>
+          <td style="padding:0 22px 20px 22px;font:400 11px/1.5 'Helvetica Neue',Arial,sans-serif;color:#94a3b8;">
+            Submission id: <code style="color:#475569;">{_esc(doc.get("id"))}</code>
+          </td>
+        </tr>
+      </table>
+    </div>
+    """
+
+
+async def _send_feedback_email(doc: Dict[str, Any]) -> None:
+    """Send the feedback email via Resend. Best-effort: any error is logged
+    and swallowed so the POST /feedback endpoint can never fail because of
+    email delivery."""
+    if not resend or not os.environ.get("RESEND_API_KEY"):
+        return
+    to_addr = (os.environ.get("FEEDBACK_EMAIL_TO") or "").strip().lower()
+    if not to_addr:
+        logging.getLogger(__name__).warning(
+            "FEEDBACK_EMAIL_TO not set — skipping feedback email send."
+        )
+        return
+    from_addr = (
+        os.environ.get("FEEDBACK_EMAIL_FROM")
+        or "Planit Feedback <onboarding@resend.dev>"
+    ).strip()
+    name = (doc.get("name") or "Anonymous").strip() or "Anonymous"
+    subject = f"New Planit feedback from {name}"
+    if doc.get("group_code"):
+        subject += f" · {doc['group_code']}"
+    params = {
+        "from": from_addr,
+        "to": [to_addr],
+        "subject": subject,
+        "html": _build_feedback_email_html(doc),
+    }
+    try:
+        # resend SDK is synchronous — push to a worker thread so we don't
+        # block the FastAPI event loop on network I/O.
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        logging.getLogger(__name__).info(
+            "Feedback email sent (resend_id=%s, to=%s)",
+            (result or {}).get("id"),
+            to_addr,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).error(
+            "Failed to send feedback email via Resend: %s", e
+        )
 
 
 @api_router.post("/feedback")
@@ -1717,6 +1836,15 @@ async def submit_feedback(payload: FeedbackIn):
     }
     await db.feedback.insert_one(doc)
     doc.pop("_id", None)
+    # Fire-and-forget email — never blocks the response. We schedule it on
+    # the running loop so the request returns immediately and any email
+    # failure is purely logged.
+    try:
+        asyncio.create_task(_send_feedback_email(doc))
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning(
+            "Could not schedule feedback email task: %s", e
+        )
     return {"ok": True, "id": doc["id"]}
 
 

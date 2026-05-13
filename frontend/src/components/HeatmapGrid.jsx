@@ -214,7 +214,7 @@ export default function HeatmapGrid({
 
 
   return (
-    <div className="neo-card p-4 sm:p-6" data-testid="heatmap" data-orientation={orientation}>
+    <div className={`neo-card p-4 sm:p-6 ${transposed ? "flex flex-col flex-1 min-h-0" : ""}`} data-testid="heatmap" data-orientation={orientation}>
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="label-caps shrink-0">
           {compareCount >= 2
@@ -254,12 +254,15 @@ export default function HeatmapGrid({
 
       {transposed ? (
         // ── Transposed: days on rows, hours on columns ──────────────────
-        <div className="scroll-x">
+        <div className="scroll-x flex-1 min-h-0">
           <div
-            className="grid gap-1 min-w-fit"
+            className="grid gap-1 min-w-fit h-full"
             style={{
               // Slim hour columns so 24 fit on a phone with horizontal scroll.
               gridTemplateColumns: `52px repeat(${timeSlots.length}, minmax(22px, 1fr))`,
+              // Day rows fill the available vertical space, with a 45px floor
+              // so cells stay chunky/tappable even on shorter viewports.
+              gridTemplateRows: `auto repeat(${columns.length}, minmax(45px, 1fr))`,
             }}
           >
             {/* Top-left blank */}
@@ -309,7 +312,7 @@ export default function HeatmapGrid({
                       className="heat-cell rounded-md relative"
                       style={{
                         background: bg,
-                        minHeight: 28,
+                        minHeight: 45,
                       }}
                       onMouseEnter={() => setHover({ ci, hi })}
                       onMouseLeave={() => setHover(null)}

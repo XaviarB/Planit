@@ -1183,6 +1183,43 @@ agent_communication:
       - Slider only appears when content overflows horizontally
       
       No issues found. Feature is production-ready.
+  - agent: "testing"
+    message: |
+      ⚠️ MOBILE HEATMAP VERTICAL FILL - PARTIAL PASS
+      
+      Tested mobile-viewport rendering of Group page heatmap (390x844 iPhone-like viewport).
+      
+      **WHAT WORKS:**
+      ✅ Heatmap orientation: days-rows (transposed mode) on mobile
+      ✅ Cell heights: 45px (meets ≥44px requirement)
+      ✅ Desktop orientation: hours-rows (default mode)
+      ✅ Desktop cell heights: 32px (correct, not 45px)
+      ✅ Tab switching: Sync orbits ↔ Crew schedule works without errors
+      
+      **LAYOUT ISSUE:**
+      ❌ Heatmap does NOT fill the screen as expected
+      - Heatmap card height: 429.8px
+      - Main shell height: 1038.9px
+      - Heatmap fills only 41.4% of available vertical space
+      - Distance from heatmap bottom to shell bottom: 128px (expected ~16px)
+      
+      **ROOT CAUSE:**
+      The heatmap card has `flex-1` but is competing with multiple sibling elements
+      in a `space-y-4` vertical stack (sub-tab buttons, week snapshot banner, quick
+      stats card). The heatmap is not the dominant flex child, so it doesn't expand
+      to fill remaining space.
+      
+      **EXPECTED BEHAVIOR:**
+      On mobile Plan tab → Sync orbits view, the heatmap should stretch vertically
+      to fill most of the available space between the top cards and the bottom tab
+      bar, with only ~16px padding at the bottom.
+      
+      **CURRENT BEHAVIOR:**
+      The heatmap takes its natural height based on 7 day-rows × 45px cells + padding,
+      leaving 128px of empty space below it before the bottom tab bar.
+      
+      Group tested: J2HLBP
+      Screenshots: mobile-heatmap-initial.png, mobile-heatmap-full.png, desktop-heatmap.png
   - agent: "main"
     message: |
       Phase-6 customise overhaul shipped. Backend changes:

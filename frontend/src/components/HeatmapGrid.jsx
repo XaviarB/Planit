@@ -223,12 +223,13 @@ export default function HeatmapGrid({
               // remaining viewport height so it visually dominates the
               // screen and the day rows scale up (the `minmax(45px, 1fr)`
               // rows expand into the extra height granted here). The
-              // subtracted offset is the rough sum of everything above
-              // the heatmap on mobile (sticky app-bar ~72, sub-tabs ~52,
-              // quick-stats ~130, space-y-4 gaps ~48, week-nav buffer
-              // ~30) plus the `with-tabbar-pad` bottom (112) and the
-              // requested 16px bottom breathing room.
-              minHeight: "calc(100dvh - 460px)",
+              // subtracted offset accounts for: sticky app-bar (~72),
+              // sub-tabs (~52), quick-stats (~130), space-y-4 gaps (~32),
+              // and the requested 16px breathing room at the bottom — but
+              // NOT the `with-tabbar-pad` bottom, because that padding is
+              // outside the dvh content area on app-shell. Keeping it
+              // tight pushes the heatmap visibly larger.
+              minHeight: "calc(100dvh - 320px)",
             }
           : undefined
       }

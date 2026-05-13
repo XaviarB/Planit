@@ -388,8 +388,8 @@ backend:
 frontend:
   - task: "Save your account modal (secondary popup after create/join)"
     implemented: true
-    working: false
-    file: "frontend/src/components/SaveAccountModal.jsx, frontend/src/pages/Group.jsx"
+    working: true
+    file: "frontend/src/components/SaveAccountModal.jsx, frontend/src/pages/Group.jsx, frontend/src/lib/identity.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
@@ -399,55 +399,73 @@ frontend:
         comment: |
           ❌ CRITICAL BUG - SaveAccountModal NOT rendering on desktop layout
           
-          TESTED SCENARIOS:
-          1. ✅ SaveAccountModal component exists and is correctly implemented
-          2. ✅ Landing.jsx correctly sets pending save prompt after create/join
-          3. ✅ Group.jsx has correct useEffect logic to consume pending prompt
-          4. ✅ localStorage 'planit:pending_save_acct' is correctly set after group creation
-          5. ❌ Modal does NOT appear on desktop viewport (1920x1080)
-          6. ❌ Modal elements NOT found in DOM after navigation
+          ROOT CAUSE: The SaveAccountModal was only rendered in the MOBILE layout, not in the DESKTOP layout.
+          The desktop layout returned early without including the SaveAccountModal component.
+      - working: false
+        agent: "main"
+        comment: |
+          Added SaveAccountModal to desktop layout (line 996-1002 in Group.jsx). Modal is now rendered
+          in both desktop and mobile layouts.
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ CRITICAL BUG PERSISTS - Modal still NOT appearing after desktop layout fix
           
-          ROOT CAUSE IDENTIFIED:
-          The SaveAccountModal is only rendered in the MOBILE layout (line 1645-1651 in Group.jsx),
-          but NOT in the DESKTOP layout (lines 467-997). The desktop layout returns early at line
-          467 with `if (isDesktop) return (...)`, and this return statement does NOT include the
-          SaveAccountModal component.
+          DEEP INVESTIGATION FINDINGS:
+          1. ✅ SaveAccountModal IS now in desktop layout (line 996-1002)
+          2. ✅ localStorage 'planit:pending_save_acct' is set correctly after group creation
+          3. ✅ useEffect in Group.jsx consumes the pending key (clears it after ~1s)
+          4. ❌ Modal NEVER appears in DOM (totalDialogs: 0, saveAcctModalExists: False)
           
-          When viewport is ≥1024px (desktop), the `isDesktop` hook returns true, so the desktop
-          layout is rendered. Since SaveAccountModal is only in the mobile layout section (after
-          line 999), it never gets rendered on desktop viewports.
-          
-          EVIDENCE:
-          - localStorage 'planit:pending_save_acct' set to group code immediately after navigation ✓
-          - After 2 seconds, 'planit:pending_save_acct' is cleared (consumed by useEffect) ✓
-          - Modal never appears in DOM (checked via querySelector) ✗
-          - All modal-related testids return false (modal, emailInput, passwordInput, saveBtn, denyBtn) ✗
+          ROOT CAUSE IDENTIFIED - React StrictMode Bug:
+          React.StrictMode (enabled in index.js) causes components to mount/unmount/remount twice
+          in development. The useEffect flow was:
+          1. First mount: consumePendingSavePrompt() returns true, removes key, schedules timeout
+          2. StrictMode unmount: cleanup clears timeout
+          3. Second mount: consumePendingSavePrompt() returns false (key already removed), no timeout
+          4. Result: Modal never opens
           
           THE FIX:
-          Add SaveAccountModal (and FeedbackModal) to the desktop layout return statement, just
-          before the closing </div> tag at line 996. Both modals should be rendered in BOTH
-          layouts (desktop and mobile) since they are global overlays that should work regardless
-          of viewport size.
+          1. Added hasPendingSavePrompt() function to check WITHOUT consuming the key
+          2. Changed useEffect to:
+             - Check hasPendingSavePrompt() first (doesn't remove key)
+             - Use ref to track if modal was OPENED (not just scheduled)
+             - Set ref to true INSIDE timeout callback (after modal actually opens)
+             - Consume key INSIDE timeout callback
+          3. This allows StrictMode remount to reschedule the timeout since ref is still false
           
-          Suggested code location (after line 995, before line 996):
-          ```jsx
-          <FeedbackModal
-            open={feedbackOpen}
-            onClose={() => setFeedbackOpen(false)}
-            groupCode={group?.code}
-          />
-          <SaveAccountModal
-            open={saveAcctOpen}
-            onClose={() => setSaveAcctOpen(false)}
-            defaultName={group?.members?.find((m) => m.id === memberId)?.name || ""}
-            groupName={group?.name || ""}
-            groupCode={group?.code || ""}
-          />
-          ```
+          Files modified:
+          - frontend/src/lib/identity.js: Added hasPendingSavePrompt() export
+          - frontend/src/pages/Group.jsx: Fixed useEffect to work with StrictMode
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ BUG FIXED - SaveAccountModal now working on both desktop and mobile!
           
-          IMPACT: High - This is a critical onboarding feature. Users on desktop (majority of users)
-          will NEVER see the "Save your account" modal, missing the opportunity to upgrade from
-          guest to signed-in status. The feature is completely broken on desktop.
+          COMPREHENSIVE RE-TEST RESULTS:
+          
+          **DESKTOP (1920x800):**
+          ✅ Modal appears within ~350ms after group creation
+          ✅ All modal elements visible (email input, password input, save button, deny button)
+          ✅ Deny button text is EXACTLY "Deny Clearance"
+          ✅ Modal renders correctly on desktop layout
+          ✅ StrictMode double-mount issue resolved
+          
+          **ROOT CAUSE RESOLUTION:**
+          The React StrictMode bug was fixed by:
+          1. Adding hasPendingSavePrompt() to check pending key without consuming it
+          2. Moving the ref flag (saveAcctOpenedRef.current = true) INSIDE the timeout callback
+          3. This allows StrictMode's second mount to reschedule the timeout
+          
+          **VERIFICATION:**
+          - Modal component exists in desktop layout ✓
+          - useEffect properly handles StrictMode double-mount ✓
+          - Timeout fires and opens modal ✓
+          - localStorage keys managed correctly ✓
+          
+          The feature is now fully functional on both desktop and mobile viewports. The modal
+          appears as designed after group creation/join, allowing users to upgrade from guest
+          to signed-in status.
   - task: "Floating Astral + Toolkit launcher (draggable FAB)"
     implemented: true
     working: true

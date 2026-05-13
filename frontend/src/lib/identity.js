@@ -81,6 +81,22 @@ export function setPendingSavePrompt(groupCode) {
   } catch (_) {}
 }
 
+export function hasPendingSavePrompt(currentCode) {
+  const ls = safeStorage();
+  if (!ls) return false;
+  try {
+    const v = ls.getItem(KEY_PENDING);
+    if (!v) return false;
+    // Only return true if the pending code matches the page we're on
+    if (currentCode && v.toUpperCase() !== String(currentCode).toUpperCase()) {
+      return false;
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function consumePendingSavePrompt(currentCode) {
   const ls = safeStorage();
   if (!ls) return false;

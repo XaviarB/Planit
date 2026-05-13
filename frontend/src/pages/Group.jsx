@@ -32,7 +32,7 @@ import FloatingLauncher from "../components/FloatingLauncher";
 import LayoutToggle, { getLayoutMode } from "../components/LayoutToggle";
 import FeedbackModal from "../components/FeedbackModal";
 import SaveAccountModal from "../components/SaveAccountModal";
-import { consumePendingSavePrompt } from "../lib/identity";
+import { consumePendingSavePrompt, hasPendingSavePrompt } from "../lib/identity";
 
 /**
  * useIsDesktop — viewport breakpoint hook with manual-override support.
@@ -94,12 +94,23 @@ export default function GroupPage() {
   // dropped by Landing.jsx via setPendingSavePrompt). A short delay
   // lets the success toast land first and the page paint before the
   // modal slides in over the dimmed dashboard.
+  // 
+  // IMPORTANT: We use a ref to track if we've already OPENED the modal
+  // (not just scheduled it) to avoid double-triggering in React StrictMode.
   const [saveAcctOpen, setSaveAcctOpen] = useState(false);
+  const saveAcctOpenedRef = useRef(false);
   useEffect(() => {
     if (!code) return;
-    const shouldShow = consumePendingSavePrompt(code);
-    if (!shouldShow) return;
-    const t = setTimeout(() => setSaveAcctOpen(true), 350);
+    if (saveAcctOpenedRef.current) return;
+    // Check if there's a pending prompt WITHOUT consuming it yet
+    const hasPending = hasPendingSavePrompt(code);
+    if (!hasPending) return;
+    // Delay the modal open slightly, and consume the key when we actually open
+    const t = setTimeout(() => {
+      consumePendingSavePrompt(code);
+      setSaveAcctOpen(true);
+      saveAcctOpenedRef.current = true; // Mark as opened AFTER we actually open
+    }, 350);
     return () => clearTimeout(t);
   }, [code]);
 
@@ -992,6 +1003,13 @@ export default function GroupPage() {
           groupName: group.name,
           groupCode: group.code,
         }}
+      />
+      <SaveAccountModal
+        open={saveAcctOpen}
+        onClose={() => setSaveAcctOpen(false)}
+        defaultName={group?.members?.find((m) => m.id === memberId)?.name || ""}
+        groupName={group?.name || ""}
+        groupCode={group?.code || ""}
       />
     </div>
   );

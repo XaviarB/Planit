@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { createGroup, getGroup, joinGroup, setLocalMemberId, addVisitedGroup } from "../lib/api";
+import { setPendingSavePrompt, hasBeenPrompted } from "../lib/identity";
 import { Users, ArrowRight, Sparkles, Calendar, ChevronDown, Zap, Rocket, Share2, Clock3, Plus } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 
@@ -61,6 +62,10 @@ export default function Landing() {
       );
       setLocalMemberId(group.code, member_id);
       addVisitedGroup({ code: group.code, name: group.name });
+      // Queue the secondary "Save your account" popup to fire on the
+      // group page (skipped if the user has already been prompted or
+      // already chose to stay a guest / sign in).
+      if (!hasBeenPrompted()) setPendingSavePrompt(group.code);
       toast.success(`Group "${group.name}" created!`);
       nav(`/g/${group.code}`);
     } catch (err) {
@@ -83,6 +88,8 @@ export default function Landing() {
       const res = await joinGroup(code, joinName.trim());
       setLocalMemberId(code, res.member_id);
       addVisitedGroup({ code, name: g.name });
+      // Same upgrade prompt after Join, not just Create.
+      if (!hasBeenPrompted()) setPendingSavePrompt(code);
       toast.success("Joined the group!");
       nav(`/g/${code}`);
     } catch (err) {

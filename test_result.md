@@ -386,6 +386,68 @@ backend:
           All acceptance criteria met. Endpoint is production-ready.
 
 frontend:
+  - task: "Save your account modal (secondary popup after create/join)"
+    implemented: true
+    working: false
+    file: "frontend/src/components/SaveAccountModal.jsx, frontend/src/pages/Group.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ CRITICAL BUG - SaveAccountModal NOT rendering on desktop layout
+          
+          TESTED SCENARIOS:
+          1. ✅ SaveAccountModal component exists and is correctly implemented
+          2. ✅ Landing.jsx correctly sets pending save prompt after create/join
+          3. ✅ Group.jsx has correct useEffect logic to consume pending prompt
+          4. ✅ localStorage 'planit:pending_save_acct' is correctly set after group creation
+          5. ❌ Modal does NOT appear on desktop viewport (1920x1080)
+          6. ❌ Modal elements NOT found in DOM after navigation
+          
+          ROOT CAUSE IDENTIFIED:
+          The SaveAccountModal is only rendered in the MOBILE layout (line 1645-1651 in Group.jsx),
+          but NOT in the DESKTOP layout (lines 467-997). The desktop layout returns early at line
+          467 with `if (isDesktop) return (...)`, and this return statement does NOT include the
+          SaveAccountModal component.
+          
+          When viewport is ≥1024px (desktop), the `isDesktop` hook returns true, so the desktop
+          layout is rendered. Since SaveAccountModal is only in the mobile layout section (after
+          line 999), it never gets rendered on desktop viewports.
+          
+          EVIDENCE:
+          - localStorage 'planit:pending_save_acct' set to group code immediately after navigation ✓
+          - After 2 seconds, 'planit:pending_save_acct' is cleared (consumed by useEffect) ✓
+          - Modal never appears in DOM (checked via querySelector) ✗
+          - All modal-related testids return false (modal, emailInput, passwordInput, saveBtn, denyBtn) ✗
+          
+          THE FIX:
+          Add SaveAccountModal (and FeedbackModal) to the desktop layout return statement, just
+          before the closing </div> tag at line 996. Both modals should be rendered in BOTH
+          layouts (desktop and mobile) since they are global overlays that should work regardless
+          of viewport size.
+          
+          Suggested code location (after line 995, before line 996):
+          ```jsx
+          <FeedbackModal
+            open={feedbackOpen}
+            onClose={() => setFeedbackOpen(false)}
+            groupCode={group?.code}
+          />
+          <SaveAccountModal
+            open={saveAcctOpen}
+            onClose={() => setSaveAcctOpen(false)}
+            defaultName={group?.members?.find((m) => m.id === memberId)?.name || ""}
+            groupName={group?.name || ""}
+            groupCode={group?.code || ""}
+          />
+          ```
+          
+          IMPACT: High - This is a critical onboarding feature. Users on desktop (majority of users)
+          will NEVER see the "Save your account" modal, missing the opportunity to upgrade from
+          guest to signed-in status. The feature is completely broken on desktop.
   - task: "Floating Astral + Toolkit launcher (draggable FAB)"
     implemented: true
     working: true
@@ -1304,12 +1366,44 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Save your account modal (secondary popup after create/join)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "testing"
+    message: |
+      ❌ CRITICAL BUG - "SAVE YOUR ACCOUNT" MODAL NOT WORKING ON DESKTOP
+      
+      Tested the new "Save your account" secondary popup that should appear after creating
+      or joining a group. The modal is completely broken on desktop viewports.
+      
+      **ROOT CAUSE:**
+      The SaveAccountModal component is only rendered in the MOBILE layout section of
+      Group.jsx (line 1645-1651), but NOT in the DESKTOP layout (lines 467-997). When
+      viewport is ≥1024px, the desktop layout returns early and never renders the modal.
+      
+      **EVIDENCE:**
+      1. ✅ SaveAccountModal component correctly implemented with all required fields
+      2. ✅ Landing.jsx correctly sets 'planit:pending_save_acct' in localStorage
+      3. ✅ Group.jsx useEffect correctly consumes the pending flag
+      4. ❌ Modal never appears in DOM on desktop viewport (1920x1080)
+      5. ❌ All modal testids return false (checked via querySelector)
+      6. ✅ localStorage shows pending flag is set then cleared (consumed)
+      
+      **THE FIX:**
+      Add both FeedbackModal and SaveAccountModal to the desktop layout return statement,
+      just before the closing </div> tag at line 996 in Group.jsx. Both modals are global
+      overlays and should be rendered in BOTH layouts.
+      
+      **IMPACT:**
+      High - Desktop users (majority) will NEVER see the "Save your account" modal. This
+      breaks the entire onboarding flow for upgrading from guest to signed-in status.
+      
+      **NEXT STEPS:**
+      Main agent should add the modal components to the desktop layout and re-test.
   - agent: "testing"
     message: |
       ✅ HEATMAP SCROLL SLIDER - ALL TESTS PASSED

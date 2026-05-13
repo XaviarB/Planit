@@ -31,6 +31,8 @@ import SuggestMeeting from "../components/SuggestMeeting";
 import FloatingLauncher from "../components/FloatingLauncher";
 import LayoutToggle, { getLayoutMode } from "../components/LayoutToggle";
 import FeedbackModal from "../components/FeedbackModal";
+import SaveAccountModal from "../components/SaveAccountModal";
+import { consumePendingSavePrompt } from "../lib/identity";
 
 /**
  * useIsDesktop — viewport breakpoint hook with manual-override support.
@@ -86,6 +88,20 @@ export default function GroupPage() {
   const [memberId, setMemberId] = useState(getLocalMemberId(code));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // "Save your account" upgrade modal — fires once on first mount of a
+  // group page after the user just created or joined a group (signal
+  // dropped by Landing.jsx via setPendingSavePrompt). A short delay
+  // lets the success toast land first and the page paint before the
+  // modal slides in over the dimmed dashboard.
+  const [saveAcctOpen, setSaveAcctOpen] = useState(false);
+  useEffect(() => {
+    if (!code) return;
+    const shouldShow = consumePendingSavePrompt(code);
+    if (!shouldShow) return;
+    const t = setTimeout(() => setSaveAcctOpen(true), 350);
+    return () => clearTimeout(t);
+  }, [code]);
 
   // Initial view state hydrated from localStorage (per-group).
   const persisted = getGroupViewState(code) || {};
@@ -1625,6 +1641,13 @@ export default function GroupPage() {
         open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
         groupCode={group?.code}
+      />
+      <SaveAccountModal
+        open={saveAcctOpen}
+        onClose={() => setSaveAcctOpen(false)}
+        defaultName={group?.members?.find((m) => m.id === memberId)?.name || ""}
+        groupName={group?.name || ""}
+        groupCode={group?.code || ""}
       />
     </div>
   );

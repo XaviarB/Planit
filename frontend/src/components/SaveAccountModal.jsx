@@ -155,18 +155,19 @@ export default function SaveAccountModal({
             >
               <ShieldCheck className="w-7 h-7 text-slate-900" strokeWidth={2.5} />
             </div>
-            <div className="label-caps mb-1">one more thing</div>
+            <div className="label-caps mb-1">security protocol</div>
             <h2
               id="save-account-title"
               className="font-heading font-black text-2xl sm:text-3xl leading-tight"
             >
-              Save your account
+              Activate Clearance
             </h2>
             <p className="text-sm mt-2" style={{ color: "var(--ink-soft)" }}>
-              We saved your info on this device. Add an email + password to{" "}
-              <strong>keep your groups across devices</strong> and unlock
-              personalised settings (saved themes, custom hours, default
-              location, and more).
+              We've logged your orbit on this device. Lock in your clearance
+              with an email + password to{" "}
+              <strong>sync access across devices</strong> and unlock
+              personalised mission settings (saved themes, custom hours,
+              default location, and more).
             </p>
 
             <ul
@@ -179,7 +180,7 @@ export default function SaveAccountModal({
                   strokeWidth={2.5}
                   style={{ color: "#10b981" }}
                 />
-                Sync your groups on any device, no rejoining
+                Clearance syncs across all your devices — no rejoining
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2
@@ -187,7 +188,7 @@ export default function SaveAccountModal({
                   strokeWidth={2.5}
                   style={{ color: "#10b981" }}
                 />
-                Customise themes, default hours, and timezone once
+                Mission defaults persist (themes, hours, timezone)
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2
@@ -195,7 +196,7 @@ export default function SaveAccountModal({
                   strokeWidth={2.5}
                   style={{ color: "#10b981" }}
                 />
-                Tailored heatmap defaults across all your crews
+                Restricted features unlock — like Customize
               </li>
             </ul>
 
@@ -248,7 +249,7 @@ export default function SaveAccountModal({
                 className="neo-btn w-full justify-center disabled:opacity-60"
                 data-testid="save-account-save-btn"
               >
-                {submitting ? "Saving…" : "Save my account"}{" "}
+                {submitting ? "Authorizing…" : "Authorize Clearance"}{" "}
                 <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
               </button>
               <button
@@ -279,13 +280,13 @@ export default function SaveAccountModal({
             >
               <CheckCircle2 className="w-7 h-7 text-slate-900" strokeWidth={2.5} />
             </div>
-            <div className="label-caps mb-1">all set</div>
+            <div className="label-caps mb-1">clearance granted</div>
             <h2 className="font-heading font-black text-2xl sm:text-3xl leading-tight">
-              Account saved 🎉
+              Protocol Activated 🛰️
             </h2>
             <p className="text-sm mt-2" style={{ color: "var(--ink-soft)" }}>
-              Your groups and preferences will now follow you across devices.
-              You can manage your account from the header pill.
+              Your orbits and preferences will now follow you across devices.
+              Manage your clearance from the pill in the header.
             </p>
             <div
               className="mt-4 px-3 py-2 rounded-2xl border-2 border-slate-900 text-xs font-heading font-black flex items-center gap-2"

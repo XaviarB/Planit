@@ -5,6 +5,9 @@ import { createGroup, getGroup, joinGroup, setLocalMemberId, addVisitedGroup } f
 import { setPendingSavePrompt, hasBeenPrompted } from "../lib/identity";
 import { Users, ArrowRight, Sparkles, Calendar, ChevronDown, Zap, Rocket, Share2, Clock3, Plus } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
+import IdentityPill from "../components/IdentityPill";
+import SaveAccountModal from "../components/SaveAccountModal";
+import { OPEN_AUTH_MODAL_EVENT } from "../lib/identity";
 
 const STEPS = [
   {
@@ -34,7 +37,17 @@ export default function Landing() {
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [howOpen, setHowOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false); // Security Protocol modal
   const howRef = useRef(null);
+
+  // The IdentityPill's "Activate Clearance" item dispatches a global
+  // event so any page can open the protocol modal. Landing listens so
+  // it works on the home page too (the Group page has its own listener).
+  useEffect(() => {
+    const onOpen = () => setAuthOpen(true);
+    window.addEventListener(OPEN_AUTH_MODAL_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_AUTH_MODAL_EVENT, onOpen);
+  }, []);
 
   // Close "How it works" dropdown when clicking outside
   useEffect(() => {
@@ -146,6 +159,7 @@ export default function Landing() {
             )}
           </div>
           <ThemeToggle className="w-10 h-10 sm:w-12 sm:h-12 shadow-[3px_3px_0_0_var(--stroke)]" />
+          <IdentityPill className="hidden sm:block" />
         </div>
       </nav>
 
@@ -371,6 +385,14 @@ export default function Landing() {
           </p>
         </div>
       </section>
+
+      {/* Security Protocol modal — opened by the header IdentityPill via
+          a global window event so the same component can be triggered
+          from the Group page or here on Landing. */}
+      <SaveAccountModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+      />
     </div>
   );
 }

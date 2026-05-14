@@ -8,6 +8,8 @@ import {
   User,
   Save,
   RefreshCw,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import {
   getGroup,
@@ -17,6 +19,14 @@ import {
   updateMemberPrefs,
 } from "../lib/api";
 import AstralBot from "../components/AstralBot";
+import SaveAccountModal from "../components/SaveAccountModal";
+import IdentityPill from "../components/IdentityPill";
+import {
+  isSignedIn,
+  subscribeIdentity,
+  requestOpenAuthModal,
+  OPEN_AUTH_MODAL_EVENT,
+} from "../lib/identity";
 
 /* -------------------------------------------------------------------------- */
 /* Tiny atoms — kept inline to keep this page self-contained.                  */
@@ -217,6 +227,24 @@ export default function CustomizePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("branding"); // branding | schedule | personal
 
+  // Clearance gate — Customize is a personalised feature, so guests are
+  // shown a "Restricted" screen with a CTA to Activate Clearance. The
+  // subscription means signing in (mock) instantly drops the gate.
+  const [signedIn, setSignedIn] = useState(() => isSignedIn());
+  useEffect(
+    () => subscribeIdentity((ident) => setSignedIn(ident?.kind === "signed_in")),
+    []
+  );
+
+  // Local Security Protocol modal mount + event listener so the pill
+  // (and the gated screen's CTA) can pop it open from this page.
+  const [authOpen, setAuthOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = () => setAuthOpen(true);
+    window.addEventListener(OPEN_AUTH_MODAL_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_AUTH_MODAL_EVENT, onOpen);
+  }, []);
+
   const memberId = getLocalMemberId(code);
 
   /* Editable state — initialised from server payload, mutated locally, saved
@@ -306,6 +334,78 @@ export default function CustomizePage() {
     };
   }, [branding]);
 
+  if (!signedIn) {
+    // Clearance-gated screen for guests / unauthenticated users.
+    return (
+      <div
+        className="min-h-screen grain"
+        style={{
+          background:
+            "radial-gradient(1200px 600px at 20% -10%, rgba(167,243,208,.5), transparent 60%), radial-gradient(900px 500px at 100% 10%, rgba(196,181,253,.5), transparent 60%), var(--bg-base)",
+        }}
+        data-testid="customize-clearance-gate"
+      >
+        <header className="sticky top-0 z-20 backdrop-blur-md bg-[var(--bg)]/80 border-b-2 border-slate-900/10">
+          <div className="max-w-6xl mx-auto px-5 py-3 flex items-center gap-3">
+            <button
+              onClick={() => nav(`/g/${code}`)}
+              className="neo-btn ghost flex items-center gap-1.5"
+              data-testid="customize-back-gated"
+            >
+              <ArrowLeft className="w-4 h-4" strokeWidth={2.5} /> Back
+            </button>
+            <div className="ml-auto">
+              <IdentityPill />
+            </div>
+          </div>
+        </header>
+        <div className="max-w-md mx-auto px-5 py-16 sm:py-24">
+          <div className="neo-card p-7 sm:p-8 bg-white text-center">
+            <div
+              className="inline-flex items-center justify-center w-16 h-16 rounded-3xl border-2 border-slate-900 mb-4 shadow-[3px_3px_0_0_rgba(15,23,42,1)]"
+              style={{ background: "var(--pastel-lavender, #ddd6fe)" }}
+            >
+              <Lock className="w-8 h-8 text-slate-900" strokeWidth={2.5} />
+            </div>
+            <div className="label-caps mb-1">restricted</div>
+            <h1 className="font-heading font-black text-2xl sm:text-3xl leading-tight">
+              Clearance Required
+            </h1>
+            <p
+              className="text-sm mt-3"
+              style={{ color: "var(--ink-soft)" }}
+            >
+              Customize is a personalised feature — themes, schedule
+              defaults, and your member preferences. Activate Clearance to
+              unlock it and keep your settings synced across devices.
+            </p>
+            <button
+              type="button"
+              onClick={() => requestOpenAuthModal()}
+              className="neo-btn w-full mt-5 justify-center"
+              data-testid="customize-activate-clearance-btn"
+            >
+              <ShieldCheck className="w-4 h-4" strokeWidth={2.5} />
+              Activate Clearance
+            </button>
+            <button
+              type="button"
+              onClick={() => nav(`/g/${code}`)}
+              className="w-full mt-2 text-xs font-heading font-black underline"
+              style={{ color: "var(--ink-soft)" }}
+            >
+              ← back to your group
+            </button>
+          </div>
+        </div>
+        <SaveAccountModal
+          open={authOpen}
+          onClose={() => setAuthOpen(false)}
+        />
+      </div>
+    );
+  }
+
   if (loading || !group || !branding || !locale) {
     return (
       <div className="min-h-screen grid place-items-center">
@@ -346,6 +446,7 @@ export default function CustomizePage() {
           >
             anyone in group can edit
           </span>
+          <IdentityPill />
         </div>
 
         {/* Tab pill — keeps every section reachable in one tap */}
@@ -789,6 +890,7 @@ export default function CustomizePage() {
           </p>
         </aside>
       </div>
+      <SaveAccountModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </div>
   );
 }

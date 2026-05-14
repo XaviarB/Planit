@@ -32,7 +32,12 @@ import FloatingLauncher from "../components/FloatingLauncher";
 import LayoutToggle, { getLayoutMode } from "../components/LayoutToggle";
 import FeedbackModal from "../components/FeedbackModal";
 import SaveAccountModal from "../components/SaveAccountModal";
-import { consumePendingSavePrompt, hasPendingSavePrompt } from "../lib/identity";
+import IdentityPill from "../components/IdentityPill";
+import {
+  consumePendingSavePrompt,
+  hasPendingSavePrompt,
+  OPEN_AUTH_MODAL_EVENT,
+} from "../lib/identity";
 
 /**
  * useIsDesktop — viewport breakpoint hook with manual-override support.
@@ -113,6 +118,14 @@ export default function GroupPage() {
     }, 350);
     return () => clearTimeout(t);
   }, [code]);
+
+  // Allow the header IdentityPill (or anything else) to pop the Security
+  // Protocol modal at any time via a global window event.
+  useEffect(() => {
+    const onOpen = () => setSaveAcctOpen(true);
+    window.addEventListener(OPEN_AUTH_MODAL_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_AUTH_MODAL_EVENT, onOpen);
+  }, []);
 
   // Initial view state hydrated from localStorage (per-group).
   const persisted = getGroupViewState(code) || {};
@@ -566,6 +579,7 @@ export default function GroupPage() {
               </span>
             )}
             <ThemeToggle />
+            <IdentityPill />
           </div>
         </div>
 
@@ -1096,6 +1110,7 @@ export default function GroupPage() {
               <MessageSquare className="w-4 h-4" strokeWidth={2.5} />
             </button>
             <ThemeToggle />
+            <IdentityPill />
           </div>
         </header>
 
